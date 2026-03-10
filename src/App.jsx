@@ -15,8 +15,10 @@ const TRUCK = { studio: 90, '2br': 130, '3br': 175, '4br': 235 };
 const E_CATS = ['Combustible','Alquiler camión','Nómina','Seguro','Marketing','Suministros','Mantenimiento','Peajes','Otro'];
 const MO = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const PIE_C = ['#C9A84C','#60A5FA','#4ADE80','#F87171','#A78BFA','#FB923C','#34D399','#F472B6','#94A3B8'];
+const PAY_METHODS = ['Efectivo','Zelle','PayPal','Stripe','Cheque','Venmo','Otro'];
 const STATUS_STYLE = {
-  paid:      { bg:'rgba(74,222,128,0.12)', color:'#4ADE80', border:'rgba(74,222,128,0.25)', label:'Pagado' },
+  paid:      { bg:'rgba(74,222,128,0.12)',  color:'#4ADE80', border:'rgba(74,222,128,0.25)',  label:'Pagado' },
+  partial:   { bg:'rgba(96,165,250,0.12)',  color:'#60A5FA', border:'rgba(96,165,250,0.25)',  label:'Anticipo recibido' },
   pending:   { bg:'rgba(251,146,60,0.12)',  color:'#FB923C', border:'rgba(251,146,60,0.25)',  label:'Pendiente' },
   cancelled: { bg:'rgba(248,113,113,0.12)', color:'#F87171', border:'rgba(248,113,113,0.25)', label:'Cancelado' },
 };
@@ -40,12 +42,12 @@ function jobTotal(j) {
 
 // ══ SAMPLE DATA (first launch) ═══════════════════════════════════
 const S_JOBS = [
-  {id:'j1',inv:'YM-0001',date:'2025-01-15',client:'María González',phone:'(201)555-0101',origin:'Newark, NJ',dest:'Elizabeth, NJ',type:'local',size:'2br',movers:3,hours:3,miles:12,rate:150,packing:false,storage:false,notes:'',status:'paid',total:1654},
-  {id:'j2',inv:'YM-0002',date:'2025-01-22',client:'Carlos Herrera',phone:'(973)555-0142',origin:'Jersey City, NJ',dest:'Paterson, NJ',type:'local',size:'3br',movers:4,hours:4,miles:18,rate:150,packing:true,storage:false,notes:'Piano en el 2do piso',status:'paid',total:2591},
-  {id:'j3',inv:'YM-0003',date:'2025-02-05',client:'Ana Pérez',phone:'(908)555-0133',origin:'Elizabeth, NJ',dest:'Miami, FL',type:'interstate',size:'2br',movers:3,hours:3,miles:1280,rate:150,packing:false,storage:true,notes:'',status:'paid',total:4270},
-  {id:'j4',inv:'YM-0004',date:'2025-02-18',client:'Roberto Silva',phone:'(732)555-0177',origin:'Trenton, NJ',dest:'Camden, NJ',type:'local',size:'studio',movers:2,hours:2,miles:8,rate:150,packing:false,storage:false,notes:'',status:'paid',total:1004},
-  {id:'j5',inv:'YM-0005',date:'2025-03-03',client:'Luisa Martínez',phone:'(201)555-0199',origin:'Hoboken, NJ',dest:'New Brunswick, NJ',type:'local',size:'2br',movers:3,hours:4,miles:20,rate:150,packing:true,storage:false,notes:'',status:'paid',total:2328},
-  {id:'j6',inv:'YM-0006',date:'2025-03-10',client:'Diego Ramírez',phone:'(908)555-0156',origin:'Newark, NJ',dest:'Houston, TX',type:'interstate',size:'3br',movers:4,hours:4,miles:1560,rate:150,packing:true,storage:true,notes:'Mudanza grande interestatal',status:'pending',total:6060},
+  {id:'j1',inv:'YM-0001',date:'2025-01-15',client:'María González',phone:'(201)555-0101',origin:'Newark, NJ',dest:'Elizabeth, NJ',type:'local',size:'2br',movers:3,hours:3,miles:12,rate:150,packing:false,storage:false,notes:'',status:'paid',total:1654,anticipo:300,payMethod:'Zelle',payLink:''},
+  {id:'j2',inv:'YM-0002',date:'2025-01-22',client:'Carlos Herrera',phone:'(973)555-0142',origin:'Jersey City, NJ',dest:'Paterson, NJ',type:'local',size:'3br',movers:4,hours:4,miles:18,rate:150,packing:true,storage:false,notes:'Piano en el 2do piso',status:'paid',total:2591,anticipo:500,payMethod:'PayPal',payLink:'https://paypal.me/yaritaomoving'},
+  {id:'j3',inv:'YM-0003',date:'2025-02-05',client:'Ana Pérez',phone:'(908)555-0133',origin:'Elizabeth, NJ',dest:'Miami, FL',type:'interstate',size:'2br',movers:3,hours:3,miles:1280,rate:150,packing:false,storage:true,notes:'',status:'paid',total:4270,anticipo:800,payMethod:'Stripe',payLink:'https://buy.stripe.com/example'},
+  {id:'j4',inv:'YM-0004',date:'2025-02-18',client:'Roberto Silva',phone:'(732)555-0177',origin:'Trenton, NJ',dest:'Camden, NJ',type:'local',size:'studio',movers:2,hours:2,miles:8,rate:150,packing:false,storage:false,notes:'',status:'paid',total:1004,anticipo:200,payMethod:'Efectivo',payLink:''},
+  {id:'j5',inv:'YM-0005',date:'2025-03-03',client:'Luisa Martínez',phone:'(201)555-0199',origin:'Hoboken, NJ',dest:'New Brunswick, NJ',type:'local',size:'2br',movers:3,hours:4,miles:20,rate:150,packing:true,storage:false,notes:'',status:'paid',total:2328,anticipo:400,payMethod:'Zelle',payLink:''},
+  {id:'j6',inv:'YM-0006',date:'2025-03-10',client:'Diego Ramírez',phone:'(908)555-0156',origin:'Newark, NJ',dest:'Houston, TX',type:'interstate',size:'3br',movers:4,hours:4,miles:1560,rate:150,packing:true,storage:true,notes:'Mudanza grande interestatal',status:'partial',total:6060,anticipo:1200,payMethod:'Stripe',payLink:'https://buy.stripe.com/example2'},
 ];
 const S_EXP = [
   {id:'e1',date:'2025-01-10',cat:'Combustible',vendor:'Shell Gas',amount:145,notes:''},
@@ -259,7 +261,7 @@ function FinancialApp() {
   );
 
   const screens = {
-    dashboard: <Dashboard chartData={chartData} expByCat={expByCat} jobs={jobs} exps={exps} moRev={moRev} moExp={moExp} netProfit={netProfit} revenue={revenue} expenses={expenses} pendJobs={pendJobs} setScreen={setScreen} setFilter={setFilter} />,
+    dashboard: <Dashboard chartData={chartData} expByCat={expByCat} jobs={jobs} exps={exps} moRev={moRev} moExp={moExp} netProfit={netProfit} revenue={revenue} expenses={expenses} pendJobs={pendJobs} setScreen={setScreen} setFilter={setFilter} partialJobs={partialJobs} anticipoTotal={anticipoTotal} balancePending={balancePending} />,
     jobs: <Jobs jobs={jobs} setJobs={sJobs} openModal={openModal} closeModal={closeModal} modal={modal} editing={editing} setViewing={setViewing} filter={filter} setFilter={setFilter} toast$={toast$} cfg={cfg} />,
     expenses: <Expenses exps={exps} setExps={sExps} openModal={openModal} closeModal={closeModal} modal={modal} editing={editing} toast$={toast$} />,
     reports: <Reports jobs={jobs} exps={exps} revenue={revenue} expenses={expenses} netProfit={netProfit} expByCat={expByCat} />,
@@ -356,7 +358,7 @@ function FinancialApp() {
       </div>
 
       {/* Invoice viewer modal */}
-      {viewing && <InvoiceModal job={viewing} onClose={()=>setViewing(null)} />}
+      {viewing && <InvoiceModal job={viewing} onClose={()=>setViewing(null)} cfg={cfg} />}
 
       {/* Toast */}
       {toast && (
@@ -369,9 +371,12 @@ function FinancialApp() {
 }
 
 // ══ DASHBOARD ════════════════════════════════════════════════════
-function Dashboard({chartData,expByCat,jobs,exps,moRev,moExp,netProfit,revenue,expenses,pendJobs,setScreen,setFilter}) {
+function Dashboard({chartData,expByCat,jobs,exps,moRev,moExp,netProfit,revenue,expenses,pendJobs,setScreen,setFilter,partialJobs,anticipoTotal,balancePending}) {
   const margin = pct(netProfit, revenue);
   const avgJob = jobs.filter(j=>j.status==='paid').length ? revenue/jobs.filter(j=>j.status==='paid').length : 0;
+  const partialJobs = jobs.filter(j=>j.status==='partial');
+  const anticipoTotal = jobs.reduce((s,j)=>s+(j.anticipo||0),0);
+  const balancePending = [...pendJobs,...partialJobs].reduce((s,j)=>s+(j.total-(j.anticipo||0)),0);
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:24}}>
@@ -381,20 +386,22 @@ function Dashboard({chartData,expByCat,jobs,exps,moRev,moExp,netProfit,revenue,e
       </div>
 
       {/* KPI Grid */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))',gap:16}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:16}}>
         {[
-          {label:'Ingresos Totales',value:$0(revenue),sub:`${$0(moRev)} este mes`,icon:'💰',color:'#C9A84C',trend:'+'},
-          {label:'Gastos Totales',value:$0(expenses),sub:`${$0(moExp)} este mes`,icon:'💸',color:'#F87171',trend:'-'},
-          {label:'Ganancia Neta',value:$0(netProfit),sub:`Margen ${margin}%`,icon:'📈',color:netProfit>=0?'#4ADE80':'#F87171',trend:netProfit>=0?'+':'-'},
-          {label:'Ticket Promedio',value:$0(avgJob),sub:`${jobs.filter(j=>j.status==='paid').length} mudanzas completadas`,icon:'🚛',color:'#60A5FA',trend:''},
+          {label:'Ingresos Cobrados',value:$0(revenue),sub:`${$0(moRev)} este mes`,icon:'💰',color:'#C9A84C'},
+          {label:'Anticipos Recibidos',value:$0(anticipoTotal),sub:`${partialJobs.length} trabajo${partialJobs.length!==1?'s':''} con anticipo`,icon:'🤝',color:'#60A5FA'},
+          {label:'Balance por Cobrar',value:$0(balancePending),sub:`${pendJobs.length+partialJobs.length} trabajos pendientes`,icon:'⏳',color:'#FB923C'},
+          {label:'Ganancia Neta',value:$0(netProfit),sub:`Margen ${margin}%`,icon:'📈',color:netProfit>=0?'#4ADE80':'#F87171'},
+          {label:'Gastos Totales',value:$0(expenses),sub:`${$0(moExp)} este mes`,icon:'💸',color:'#F87171'},
+          {label:'Ticket Promedio',value:$0(avgJob),sub:`${jobs.filter(j=>j.status==='paid').length} completadas`,icon:'🚛',color:'#A78BFA'},
         ].map((k,i)=>(
           <div key={i} className="hover-card" style={{...S.card,transition:'all 0.2s',cursor:'default'}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
-              <span style={{fontSize:'1.5rem'}}>{k.icon}</span>
-              <span style={{fontSize:'0.7rem',fontWeight:700,letterSpacing:'0.1em',textTransform:'uppercase',color:k.color,background:`${k.color}18`,padding:'3px 8px',borderRadius:20}}>{k.label}</span>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12}}>
+              <span style={{fontSize:'1.4rem'}}>{k.icon}</span>
+              <span style={{fontSize:'0.65rem',fontWeight:700,letterSpacing:'0.1em',textTransform:'uppercase',color:k.color,background:`${k.color}18`,padding:'3px 8px',borderRadius:20}}>{k.label}</span>
             </div>
-            <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'1.8rem',color:k.color,lineHeight:1,marginBottom:6}}>{k.value}</div>
-            <div style={{fontSize:'0.78rem',color:'#64748B'}}>{k.sub}</div>
+            <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'1.7rem',color:k.color,lineHeight:1,marginBottom:5}}>{k.value}</div>
+            <div style={{fontSize:'0.76rem',color:'#64748B'}}>{k.sub}</div>
           </div>
         ))}
       </div>
@@ -485,29 +492,49 @@ function Dashboard({chartData,expByCat,jobs,exps,moRev,moExp,netProfit,revenue,e
           </div>
         </div>
 
-        {/* Pending payments */}
+        {/* Pending + Partial payments */}
         <div style={S.card}>
           <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:'1rem',marginBottom:4}}>⚡ Cobros Pendientes</div>
-          <div style={{fontSize:'0.78rem',color:'#64748B',marginBottom:16}}>Total: <span style={{color:'#FB923C',fontWeight:700}}>{$0(pendJobs.reduce((s,j)=>s+j.total,0))}</span></div>
-          {pendJobs.length === 0 ? (
+          <div style={{fontSize:'0.78rem',color:'#64748B',marginBottom:16}}>
+            Por cobrar: <span style={{color:'#FB923C',fontWeight:700}}>{$0(balancePending)}</span>
+            {anticipoTotal > 0 && <span style={{marginLeft:10}}>· Anticipos: <span style={{color:'#60A5FA',fontWeight:700}}>{$0(anticipoTotal)}</span></span>}
+          </div>
+          {[...pendJobs,...partialJobs].length === 0 ? (
             <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:120,gap:8,color:'#64748B',fontSize:'0.85rem'}}>
-              <span style={{fontSize:'2rem'}}>✅</span>
-              Todo al día
+              <span style={{fontSize:'2rem'}}>✅</span>Todo al día
             </div>
           ) : (
             <div style={{display:'flex',flexDirection:'column',gap:8}}>
-              {pendJobs.map(j=>(
-                <div key={j.id} style={{background:'rgba(251,146,60,0.06)',border:'1px solid rgba(251,146,60,0.15)',borderRadius:10,padding:'12px 14px'}}>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
-                    <div>
-                      <div style={{fontSize:'0.86rem',fontWeight:600,color:'#F1F5F9'}}>{j.client}</div>
-                      <div style={{fontSize:'0.72rem',color:'#64748B',marginTop:2}}>{j.inv} · {fmtDate(j.date)}</div>
+              {[...partialJobs,...pendJobs].map(j=>{
+                const balance = j.total - (j.anticipo||0);
+                const isPartial = j.status==='partial';
+                return (
+                  <div key={j.id} style={{background:isPartial?'rgba(96,165,250,0.06)':'rgba(251,146,60,0.06)',border:`1px solid ${isPartial?'rgba(96,165,250,0.15)':'rgba(251,146,60,0.15)'}`,borderRadius:10,padding:'12px 14px'}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:isPartial?6:0}}>
+                      <div>
+                        <div style={{fontSize:'0.86rem',fontWeight:600,color:'#F1F5F9'}}>{j.client}</div>
+                        <div style={{fontSize:'0.72rem',color:'#64748B',marginTop:2}}>{j.inv} · {fmtDate(j.date)}</div>
+                      </div>
+                      <div style={{textAlign:'right'}}>
+                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'1rem',color:isPartial?'#60A5FA':'#FB923C'}}>{$0(balance)}</div>
+                        <div style={{fontSize:'0.68rem',color:'#64748B'}}>balance</div>
+                      </div>
                     </div>
-                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'1.1rem',color:'#FB923C'}}>{$0(j.total)}</div>
+                    {isPartial && (
+                      <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.74rem',color:'#64748B',paddingTop:4,borderTop:'1px solid rgba(255,255,255,0.05)'}}>
+                        <span>Anticipo recibido: <span style={{color:'#4ADE80',fontWeight:600}}>{$0(j.anticipo)}</span></span>
+                        <span>Total: {$0(j.total)}</span>
+                      </div>
+                    )}
+                    {j.payLink && (
+                      <a href={j.payLink} target="_blank" rel="noopener noreferrer" style={{display:'inline-flex',alignItems:'center',gap:4,marginTop:6,fontSize:'0.73rem',color:'#60A5FA',textDecoration:'none',background:'rgba(96,165,250,0.08)',padding:'3px 10px',borderRadius:20,border:'1px solid rgba(96,165,250,0.15)'}}>
+                        🔗 Enviar enlace de pago
+                      </a>
+                    )}
                   </div>
-                </div>
-              ))}
-              <button onClick={()=>{setScreen('jobs');setFilter('pending');}} style={{...S.btn,background:'rgba(251,146,60,0.12)',color:'#FB923C',border:'1px solid rgba(251,146,60,0.2)',width:'100%',justifyContent:'center',marginTop:4}}>
+                );
+              })}
+              <button onClick={()=>{setScreen('jobs');setFilter('pending');}} style={{...S.btn,background:'rgba(251,146,60,0.1)',color:'#FB923C',border:'1px solid rgba(251,146,60,0.2)',width:'100%',justifyContent:'center',marginTop:4}}>
                 Gestionar cobros →
               </button>
             </div>
@@ -524,7 +551,7 @@ function Jobs({jobs,setJobs,openModal,closeModal,modal,editing,setViewing,filter
   const [form, setForm] = useState(null);
   const [search, setSearch] = useState('');
 
-  const emptyForm = { client:'',phone:'',date:tod(),origin:'',dest:'',type:'local',size:'2br',movers:3,hours:3,miles:15,rate:cfg.rate||150,packing:false,storage:false,notes:'',status:'pending' };
+  const emptyForm = { client:'',phone:'',date:tod(),origin:'',dest:'',type:'local',size:'2br',movers:3,hours:3,miles:15,rate:cfg.rate||150,packing:false,storage:false,notes:'',status:'pending',anticipo:0,payMethod:'Zelle',payLink:'' };
 
   useEffect(() => {
     if (modal==='job') { setForm(editing ? {...editing} : emptyForm); setShowForm(true); }
@@ -557,14 +584,19 @@ function Jobs({jobs,setJobs,openModal,closeModal,modal,editing,setViewing,filter
   const markPaid = id => { setJobs(jobs.map(j=>j.id===id?{...j,status:'paid'}:j)); toast$('Marcado como pagado ✓'); };
   const delJob  = id => { if(window.confirm('¿Eliminar esta mudanza?')) { setJobs(jobs.filter(j=>j.id!==id)); toast$('Mudanza eliminada'); } };
 
-  const totals = { all: jobs.reduce((s,j)=>s+(j.status==='paid'?j.total:0),0), pending: jobs.filter(j=>j.status==='pending').reduce((s,j)=>s+j.total,0) };
+  const totals = {
+    all: jobs.filter(j=>j.status==='paid').reduce((s,j)=>s+j.total,0),
+    pending: jobs.filter(j=>j.status==='pending').reduce((s,j)=>s+j.total,0),
+    anticipo: jobs.reduce((s,j)=>s+(j.anticipo||0),0),
+    balance: jobs.filter(j=>j.status!=='paid'&&j.status!=='cancelled').reduce((s,j)=>s+(j.total-(j.anticipo||0)),0),
+  };
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:20}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
         <div>
           <h1 style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'1.5rem',marginBottom:4}}>Mudanzas</h1>
-          <p style={{color:'#64748B',fontSize:'0.85rem'}}>{jobs.length} trabajos registrados · Cobrado: <span style={{color:'#4ADE80'}}>{$0(totals.all)}</span> · Pendiente: <span style={{color:'#FB923C'}}>{$0(totals.pending)}</span></p>
+          <p style={{color:'#64748B',fontSize:'0.85rem'}}>{jobs.length} trabajos · Cobrado: <span style={{color:'#4ADE80'}}>{$0(totals.all)}</span> · Anticipos: <span style={{color:'#60A5FA'}}>{$0(totals.anticipo)}</span> · Balance: <span style={{color:'#FB923C'}}>{$0(totals.balance)}</span></p>
         </div>
         <button onClick={()=>openModal('job')} style={{...S.btn,background:'#C9A84C',color:'#0A0C14',fontWeight:700,fontSize:'0.9rem',padding:'10px 20px'}}>
           + Nueva Mudanza
@@ -573,7 +605,7 @@ function Jobs({jobs,setJobs,openModal,closeModal,modal,editing,setViewing,filter
 
       {/* Filters + Search */}
       <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
-        {[['all','Todas'],['pending','Pendientes'],['paid','Pagadas'],['cancelled','Canceladas']].map(([v,l])=>(
+        {[['all','Todas'],['pending','Pendientes'],['partial','Anticipo'],['paid','Pagadas'],['cancelled','Canceladas']].map(([v,l])=>(
           <button key={v} onClick={()=>setFilter(v)} style={{...S.btn,background:filter===v?'#C9A84C':'rgba(255,255,255,0.05)',color:filter===v?'#0A0C14':'#94A3B8',border:filter===v?'none':'1px solid rgba(255,255,255,0.08)',padding:'7px 16px',fontSize:'0.82rem'}}>{l}</button>
         ))}
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar cliente, factura..." style={{...S.input,width:'auto',flex:1,minWidth:180,padding:'7px 14px',fontSize:'0.85rem'}}/>
@@ -585,7 +617,7 @@ function Jobs({jobs,setJobs,openModal,closeModal,modal,editing,setViewing,filter
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.84rem'}}>
             <thead>
               <tr style={{borderBottom:'1px solid rgba(255,255,255,0.06)'}}>
-                {['Factura','Fecha','Cliente','Ruta','Millas','Monto','Estado','Acciones'].map(h=>(
+                {['Factura','Fecha','Cliente','Ruta','Total','Anticipo','Balance','Pago','Estado','Acciones'].map(h=>(
                   <th key={h} style={{textAlign:'left',padding:'10px 12px',color:'#64748B',fontSize:'0.72rem',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase',whiteSpace:'nowrap'}}>{h}</th>
                 ))}
               </tr>
@@ -594,7 +626,9 @@ function Jobs({jobs,setJobs,openModal,closeModal,modal,editing,setViewing,filter
               {filtered.length === 0 && (
                 <tr><td colSpan={8} style={{textAlign:'center',padding:40,color:'#64748B',fontSize:'0.88rem'}}>No hay mudanzas{filter!=='all'?' con este estado':''}</td></tr>
               )}
-              {filtered.map(j=>(
+              {filtered.map(j=>{
+                const balance = j.total - (j.anticipo||0);
+                return (
                 <tr key={j.id} className="row" style={{borderBottom:'1px solid rgba(255,255,255,0.04)',transition:'background 0.15s'}}>
                   <td style={{padding:'12px 12px'}}><span style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:'0.8rem',color:'#C9A84C'}}>{j.inv}</span></td>
                   <td style={{padding:'12px 12px',color:'#94A3B8',whiteSpace:'nowrap'}}>{fmtDate(j.date)}</td>
@@ -602,23 +636,39 @@ function Jobs({jobs,setJobs,openModal,closeModal,modal,editing,setViewing,filter
                     <div style={{fontWeight:500,color:'#F1F5F9'}}>{j.client}</div>
                     <div style={{fontSize:'0.72rem',color:'#64748B'}}>{j.phone}</div>
                   </td>
-                  <td style={{padding:'12px 12px',maxWidth:180}}>
+                  <td style={{padding:'12px 12px',maxWidth:160}}>
                     <div style={{fontSize:'0.78rem',color:'#94A3B8',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{j.origin}</div>
                     <div style={{fontSize:'0.73rem',color:'#64748B'}}>→ {j.dest}</div>
                   </td>
-                  <td style={{padding:'12px 12px',color:'#94A3B8',textAlign:'center'}}>{(j.miles||0).toLocaleString()}</td>
                   <td style={{padding:'12px 12px'}}><span style={{fontFamily:"'Syne',sans-serif",fontWeight:700,color:'#F1F5F9'}}>{$0(j.total)}</span></td>
+                  <td style={{padding:'12px 12px'}}>
+                    {(j.anticipo||0) > 0
+                      ? <span style={{fontWeight:600,color:'#4ADE80'}}>{$0(j.anticipo)}</span>
+                      : <span style={{color:'#374151',fontSize:'0.8rem'}}>—</span>}
+                  </td>
+                  <td style={{padding:'12px 12px'}}>
+                    {j.status==='paid'
+                      ? <span style={{color:'#4ADE80',fontSize:'0.8rem'}}>✓ Saldado</span>
+                      : <span style={{fontWeight:700,color:balance>0?'#FB923C':'#4ADE80'}}>{$0(balance)}</span>}
+                  </td>
+                  <td style={{padding:'12px 12px'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:5}}>
+                      <span style={{fontSize:'0.78rem',color:'#94A3B8'}}>{j.payMethod||'—'}</span>
+                      {j.payLink && <a href={j.payLink} target="_blank" rel="noopener noreferrer" title="Enlace de pago" style={{color:'#60A5FA',fontSize:'0.85rem',textDecoration:'none'}}>🔗</a>}
+                    </div>
+                  </td>
                   <td style={{padding:'12px 12px'}}><span style={S.badge(j.status)}>{STATUS_STYLE[j.status]?.label}</span></td>
                   <td style={{padding:'12px 12px'}}>
                     <div style={{display:'flex',gap:4}}>
                       <button className="ico-btn" onClick={()=>setViewing(j)} title="Ver factura" style={{background:'none',border:'none',color:'#94A3B8',padding:5,borderRadius:6,fontSize:'0.9rem'}}>👁</button>
                       <button className="ico-btn" onClick={()=>openModal('job',j)} title="Editar" style={{background:'none',border:'none',color:'#94A3B8',padding:5,borderRadius:6,fontSize:'0.9rem'}}>✏️</button>
-                      {j.status==='pending' && <button className="ico-btn" onClick={()=>markPaid(j.id)} title="Marcar pagado" style={{background:'none',border:'none',color:'#4ADE80',padding:5,borderRadius:6,fontSize:'0.9rem'}}>✅</button>}
+                      {(j.status==='pending'||j.status==='partial') && <button className="ico-btn" onClick={()=>markPaid(j.id)} title="Marcar pagado" style={{background:'none',border:'none',color:'#4ADE80',padding:5,borderRadius:6,fontSize:'0.9rem'}}>✅</button>}
                       <button className="ico-btn" onClick={()=>delJob(j.id)} title="Eliminar" style={{background:'none',border:'none',color:'#F87171',padding:5,borderRadius:6,fontSize:'0.9rem'}}>🗑</button>
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -649,9 +699,19 @@ function Jobs({jobs,setJobs,openModal,closeModal,modal,editing,setViewing,filter
             <FG label="Tarifa/hr por mudancero ($)"><input type="number" style={S.input} value={form.rate} onChange={e=>setForm({...form,rate:+e.target.value})} min={50}/></FG>
             <FG label="Estado"><select style={S.input} value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>
               <option value="pending">Pendiente de pago</option>
-              <option value="paid">Pagado</option>
+              <option value="partial">Anticipo recibido</option>
+              <option value="paid">Pagado completo</option>
               <option value="cancelled">Cancelado</option>
             </select></FG>
+            <FG label="Anticipo recibido ($)">
+              <input type="number" style={S.input} value={form.anticipo||0} onChange={e=>setForm({...form,anticipo:+e.target.value})} min={0} placeholder="0"/>
+            </FG>
+            <FG label="Método de pago"><select style={S.input} value={form.payMethod||'Zelle'} onChange={e=>setForm({...form,payMethod:e.target.value})}>
+              {PAY_METHODS.map(m=><option key={m}>{m}</option>)}
+            </select></FG>
+            <FG label="Enlace de pago (opcional)">
+              <input style={S.input} value={form.payLink||''} onChange={e=>setForm({...form,payLink:e.target.value})} placeholder="https://buy.stripe.com/... o paypal.me/..."/>
+            </FG>
           </div>
           <div style={{display:'flex',gap:20,marginTop:10}}>
             <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',fontSize:'0.88rem',color:'#94A3B8'}}>
@@ -683,6 +743,17 @@ function Jobs({jobs,setJobs,openModal,closeModal,modal,editing,setViewing,filter
               <span style={{color:'#C9A84C'}}>TOTAL</span>
               <span style={{color:'#C9A84C'}}>{$0(c.total)}</span>
             </div>
+            {(form.anticipo||0) > 0 && (
+              <>
+                <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.82rem',color:'#4ADE80',marginTop:8}}>
+                  <span>✓ Anticipo recibido</span><span style={{fontWeight:600}}>-{$0(form.anticipo)}</span>
+                </div>
+                <div style={{display:'flex',justifyContent:'space-between',fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'1rem',color:'#FB923C',marginTop:4,paddingTop:6,borderTop:'1px solid rgba(251,146,60,0.2)'}}>
+                  <span>BALANCE POR COBRAR</span>
+                  <span>{$0(c.total-(form.anticipo||0))}</span>
+                </div>
+              </>
+            )}
           </div>
 
           <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginTop:16}}>
@@ -1056,67 +1127,214 @@ function Settings({cfg,setCfg,toast$}) {
 }
 
 // ══ INVOICE MODAL ════════════════════════════════════════════════
-function InvoiceModal({job,onClose}) {
+function InvoiceModal({job, onClose, cfg}) {
   const calc = jobTotal(job);
+  const balance = job.total - (job.anticipo||0);
+  const isPaid = job.status === 'paid';
+  const isPartial = job.status === 'partial';
+  const dueDate = (() => {
+    const d = new Date(job.date+'T12:00:00');
+    d.setDate(d.getDate()+7);
+    return d.toLocaleDateString('es-US',{day:'2-digit',month:'short',year:'numeric'});
+  })();
+
+  const printInvoice = () => {
+    const el = document.getElementById('invoice-print-area');
+    const w = window.open('','_blank','width=800,height=900');
+    w.document.write(`
+      <html><head>
+      <title>Factura ${job.inv} · ${job.client}</title>
+      <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Syne:wght@700;800&display=swap" rel="stylesheet"/>
+      <style>
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:'Outfit',sans-serif;color:#1e293b;background:#fff;padding:0}
+        @media print{@page{margin:15mm;size:A4}}
+      </style>
+      </head><body>${el.innerHTML}</body></html>
+    `);
+    w.document.close();
+    setTimeout(()=>{ w.focus(); w.print(); },600);
+  };
+
+  const waText = encodeURIComponent(
+    `Hola ${job.client} 👋\n\nAdjunto tu factura de Yaritao Moving:\n\n` +
+    `📋 Factura: ${job.inv}\n` +
+    `📅 Fecha: ${fmtDate(job.date)}\n` +
+    `📍 ${job.origin} → ${job.dest}\n\n` +
+    `💰 Total: $${job.total.toLocaleString()}\n` +
+    ((job.anticipo||0)>0 ? `✅ Anticipo recibido: $${(job.anticipo).toLocaleString()}\n⏳ Balance pendiente: $${balance.toLocaleString()}\n` : '') +
+    (job.payLink ? `\n🔗 Paga aquí: ${job.payLink}\n` : '') +
+    `\n¡Gracias por confiar en nosotros! 🚛`
+  );
+
   return (
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.8)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999,padding:20}} onClick={onClose}>
-      <div className="modal-inner" style={{background:'#fff',color:'#0A0C14',borderRadius:14,padding:40,maxWidth:520,width:'100%',maxHeight:'90vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
-        {/* Invoice header */}
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:28}}>
-          <div>
-            <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'1.6rem',color:'#0A0C14'}}>🚛 YARITAO MOVING</div>
-            <div style={{fontSize:'0.82rem',color:'#64748B',marginTop:2}}>(908) 457-8129 · New Jersey, EE.UU.</div>
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999,padding:'16px'}} onClick={onClose}>
+      <div className="modal-inner" style={{background:'#0F1117',border:'1px solid rgba(255,255,255,0.08)',borderRadius:16,width:'100%',maxWidth:680,maxHeight:'95vh',display:'flex',flexDirection:'column',overflow:'hidden'}} onClick={e=>e.stopPropagation()}>
+
+        {/* Toolbar */}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 20px',borderBottom:'1px solid rgba(255,255,255,0.07)',flexShrink:0}}>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'0.95rem',color:'#F1F5F9'}}>Factura {job.inv}</span>
+            <span style={S.badge(job.status)}>{STATUS_STYLE[job.status]?.label}</span>
           </div>
-          <div style={{textAlign:'right'}}>
-            <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'1.1rem',color:'#C9A84C'}}>{job.inv}</div>
-            <div style={{fontSize:'0.8rem',color:'#64748B',marginTop:2}}>{fmtDate(job.date)}</div>
+          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            <a href={`https://wa.me/${(job.phone||'').replace(/\D/g,'')}?text=${waText}`} target="_blank" rel="noopener noreferrer"
+              style={{...S.btn,background:'rgba(37,211,102,0.12)',color:'#25D366',border:'1px solid rgba(37,211,102,0.25)',padding:'7px 14px',fontSize:'0.8rem',textDecoration:'none'}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+              WhatsApp
+            </a>
+            <button onClick={printInvoice} style={{...S.btn,background:'rgba(201,168,76,0.12)',color:'#C9A84C',border:'1px solid rgba(201,168,76,0.25)',padding:'7px 14px',fontSize:'0.8rem'}}>
+              🖨 PDF / Imprimir
+            </button>
+            <button onClick={onClose} style={{background:'rgba(255,255,255,0.06)',border:'none',color:'#94A3B8',width:30,height:30,borderRadius:6,cursor:'pointer',fontSize:'1rem'}}>✕</button>
           </div>
         </div>
 
-        <div style={{background:'#F8F9FA',borderRadius:10,padding:'14px 18px',marginBottom:20}}>
-          <div style={{fontWeight:700,fontSize:'0.75rem',letterSpacing:'0.1em',textTransform:'uppercase',color:'#64748B',marginBottom:8}}>Cliente</div>
-          <div style={{fontWeight:700,fontSize:'1rem'}}>{job.client}</div>
-          <div style={{fontSize:'0.84rem',color:'#64748B',marginTop:2}}>{job.phone}</div>
-          <div style={{fontSize:'0.84rem',color:'#64748B',marginTop:6}}>📍 {job.origin} → {job.dest}</div>
-          <div style={{fontSize:'0.78rem',color:'#94A3B8',marginTop:2}}>{(job.miles||0).toLocaleString()} millas · {job.movers} mudanceros · {job.hours} horas</div>
-        </div>
+        {/* Invoice preview — scrollable */}
+        <div style={{overflowY:'auto',flex:1,padding:24}}>
+          <div id="invoice-print-area">
+            {/* Printable invoice — white background */}
+            <div style={{background:'#ffffff',color:'#1e293b',borderRadius:12,overflow:'hidden',fontFamily:"'Outfit',sans-serif",boxShadow:'0 4px 32px rgba(0,0,0,0.3)'}}>
 
-        <table style={{width:'100%',borderCollapse:'collapse',marginBottom:16,fontSize:'0.86rem'}}>
-          <thead>
-            <tr style={{background:'#F1F5F9'}}>
-              <th style={{textAlign:'left',padding:'8px 12px',fontWeight:700,fontSize:'0.72rem',letterSpacing:'0.08em',textTransform:'uppercase',color:'#64748B'}}>Concepto</th>
-              <th style={{textAlign:'right',padding:'8px 12px',fontWeight:700,fontSize:'0.72rem',letterSpacing:'0.08em',textTransform:'uppercase',color:'#64748B'}}>Monto</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[
-              [`Mano de obra — $${job.rate||150}/hr × ${job.movers} mud. × ${job.hours} hrs`, calc.labor],
-              [`Alquiler camión (${job.size||'2br'})`, calc.truck],
-              [`Millas recorridas — ${job.miles||0} mi × $${MILE_RATE}`, calc.miles],
-              job.packing && ['Empaque completo', calc.pack],
-              job.storage && ['Almacenamiento temporal', calc.stor],
-            ].filter(Boolean).map(([c,v],i)=>(
-              <tr key={i} style={{borderBottom:'1px solid #F1F5F9'}}>
-                <td style={{padding:'10px 12px',color:'#374151'}}>{c}</td>
-                <td style={{padding:'10px 12px',textAlign:'right',fontWeight:600}}>{$0(v)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+              {/* Gold header bar */}
+              <div style={{background:'linear-gradient(135deg,#B8914A,#C9A84C,#8B6914)',padding:'28px 36px',display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+                <div>
+                  <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'1.8rem',color:'#fff',letterSpacing:'-0.02em',lineHeight:1}}>🚛 YARITAO MOVING</div>
+                  <div style={{color:'rgba(255,255,255,0.8)',fontSize:'0.82rem',marginTop:6}}>{cfg?.phone||'(908) 457-8129'} · New Jersey, EE.UU.</div>
+                  <div style={{color:'rgba(255,255,255,0.7)',fontSize:'0.76rem',marginTop:2}}>Servicio profesional de mudanzas · Español & English</div>
+                </div>
+                <div style={{textAlign:'right'}}>
+                  <div style={{background:'rgba(255,255,255,0.15)',borderRadius:8,padding:'10px 16px',backdropFilter:'blur(8px)'}}>
+                    <div style={{fontSize:'0.65rem',fontWeight:700,letterSpacing:'0.15em',color:'rgba(255,255,255,0.7)',textTransform:'uppercase',marginBottom:3}}>FACTURA</div>
+                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'1.4rem',color:'#fff'}}>{job.inv}</div>
+                  </div>
+                  <div style={{color:'rgba(255,255,255,0.7)',fontSize:'0.75rem',marginTop:8}}>
+                    <div>Emitida: {fmtDate(job.date)}</div>
+                    {!isPaid && <div style={{marginTop:2}}>Vence: {dueDate}</div>}
+                  </div>
+                </div>
+              </div>
 
-        <div style={{background:job.status==='paid'?'rgba(74,222,128,0.08)':'rgba(251,146,60,0.08)',border:`1px solid ${job.status==='paid'?'rgba(74,222,128,0.3)':'rgba(251,146,60,0.3)'}`,borderRadius:10,padding:'14px 18px',display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-          <div>
-            <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'1.1rem',color:'#0A0C14'}}>TOTAL</div>
-            <div style={{fontSize:'0.75rem',color:'#64748B',marginTop:2}}>{STATUS_STYLE[job.status]?.label}</div>
+              {/* Body */}
+              <div style={{padding:'28px 36px'}}>
+
+                {/* Client + Service info */}
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:28}}>
+                  <div style={{background:'#F8FAFC',borderRadius:10,padding:'16px 18px',borderLeft:'3px solid #C9A84C'}}>
+                    <div style={{fontSize:'0.65rem',fontWeight:700,letterSpacing:'0.15em',color:'#94A3B8',textTransform:'uppercase',marginBottom:10}}>Facturado a</div>
+                    <div style={{fontWeight:700,fontSize:'1.05rem',color:'#0f172a'}}>{job.client}</div>
+                    {job.phone && <div style={{fontSize:'0.82rem',color:'#64748B',marginTop:4}}>📱 {job.phone}</div>}
+                  </div>
+                  <div style={{background:'#F8FAFC',borderRadius:10,padding:'16px 18px',borderLeft:'3px solid #60A5FA'}}>
+                    <div style={{fontSize:'0.65rem',fontWeight:700,letterSpacing:'0.15em',color:'#94A3B8',textTransform:'uppercase',marginBottom:10}}>Detalles del servicio</div>
+                    <div style={{fontSize:'0.82rem',color:'#374151',lineHeight:1.7}}>
+                      <div>📍 <strong>Origen:</strong> {job.origin}</div>
+                      <div>🏁 <strong>Destino:</strong> {job.dest}</div>
+                      <div>🚛 <strong>Tipo:</strong> {job.type==='local'?'Mudanza Local (NJ)':'Mudanza Interestatal'}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Work details chips */}
+                <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:24}}>
+                  {[
+                    `👷 ${job.movers} mudanceros`,
+                    `⏱ ${job.hours} horas`,
+                    `📍 ${(job.miles||0).toLocaleString()} millas`,
+                    `💵 $${job.rate||150}/hr por mud.`,
+                    job.packing && '📦 Empaque incluido',
+                    job.storage && '🗄 Storage incluido',
+                  ].filter(Boolean).map((chip,i)=>(
+                    <span key={i} style={{background:'#EFF6FF',color:'#1d4ed8',border:'1px solid #BFDBFE',borderRadius:20,padding:'4px 12px',fontSize:'0.76rem',fontWeight:500}}>{chip}</span>
+                  ))}
+                </div>
+
+                {/* Line items table */}
+                <table style={{width:'100%',borderCollapse:'collapse',marginBottom:20}}>
+                  <thead>
+                    <tr style={{background:'#1e293b'}}>
+                      <th style={{textAlign:'left',padding:'10px 14px',color:'#fff',fontSize:'0.72rem',fontWeight:700,letterSpacing:'0.1em',textTransform:'uppercase',borderRadius:'6px 0 0 6px'}}>Concepto</th>
+                      <th style={{textAlign:'right',padding:'10px 14px',color:'#fff',fontSize:'0.72rem',fontWeight:700,letterSpacing:'0.1em',textTransform:'uppercase',borderRadius:'0 6px 6px 0',width:120}}>Monto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { label:`Mano de obra`, detail:`$${job.rate||150}/hr × ${job.movers} mudanceros × ${job.hours} horas`, value: calc.labor },
+                      { label:`Alquiler de camión`, detail:`Tamaño del hogar: ${job.size==='studio'?'Estudio/1 hab':job.size==='2br'?'2 habitaciones':job.size==='3br'?'3 habitaciones':'4+ habitaciones'}`, value: calc.truck },
+                      { label:`Millas recorridas`, detail:`${(job.miles||0).toLocaleString()} millas × $${MILE_RATE}/mi`, value: calc.miles },
+                      job.packing && { label:`Servicio de empaque completo`, detail:'Materiales + mano de obra de empaque', value: calc.pack },
+                      job.storage && { label:`Almacenamiento temporal`, detail:'Hasta 30 días en instalaciones aseguradas', value: calc.stor },
+                    ].filter(Boolean).map((row,i,arr)=>(
+                      <tr key={i} style={{borderBottom: i<arr.length-1 ? '1px solid #F1F5F9' : 'none', background: i%2===0?'#fff':'#FAFBFC'}}>
+                        <td style={{padding:'12px 14px'}}>
+                          <div style={{fontWeight:600,color:'#1e293b',fontSize:'0.88rem'}}>{row.label}</div>
+                          <div style={{fontSize:'0.74rem',color:'#94A3B8',marginTop:2}}>{row.detail}</div>
+                        </td>
+                        <td style={{padding:'12px 14px',textAlign:'right',fontWeight:700,fontSize:'0.92rem',color:'#1e293b'}}>${row.value.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {/* Totals block */}
+                <div style={{background:'#F8FAFC',borderRadius:10,padding:'16px 18px',marginBottom:20}}>
+                  <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.88rem',color:'#64748B',marginBottom:8,paddingBottom:8,borderBottom:'1px solid #E2E8F0'}}>
+                    <span>Subtotal</span>
+                    <span style={{fontWeight:600,color:'#1e293b'}}>${job.total.toLocaleString()}</span>
+                  </div>
+                  {(job.anticipo||0) > 0 && (
+                    <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.88rem',color:'#16a34a',marginBottom:8,paddingBottom:8,borderBottom:'1px solid #E2E8F0'}}>
+                      <span>✓ Anticipo recibido ({job.payMethod||''})</span>
+                      <span style={{fontWeight:600}}>− ${(job.anticipo).toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <div>
+                      <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'1rem',color: isPaid?'#16a34a' : '#1e293b'}}>
+                        {isPaid ? '✓ PAGADO COMPLETO' : (job.anticipo||0)>0 ? 'BALANCE POR COBRAR' : 'TOTAL A PAGAR'}
+                      </div>
+                      {!isPaid && <div style={{fontSize:'0.72rem',color:'#94A3B8',marginTop:2}}>Método: {job.payMethod||'Por confirmar'}{!isPaid&&` · Vence: ${dueDate}`}</div>}
+                    </div>
+                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'2rem',color: isPaid?'#16a34a': isPartial?'#2563eb':'#B8914A'}}>
+                      ${(isPaid ? job.total : balance).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment link */}
+                {job.payLink && !isPaid && (
+                  <div style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:10,padding:'12px 16px',marginBottom:20,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <div>
+                      <div style={{fontWeight:600,fontSize:'0.85rem',color:'#1d4ed8'}}>🔗 Paga en línea</div>
+                      <div style={{fontSize:'0.74rem',color:'#60A5FA',marginTop:2}}>{job.payLink}</div>
+                    </div>
+                    <span style={{background:'#1d4ed8',color:'#fff',borderRadius:8,padding:'6px 14px',fontSize:'0.78rem',fontWeight:700}}>{job.payMethod} →</span>
+                  </div>
+                )}
+
+                {/* Notes */}
+                {job.notes && (
+                  <div style={{background:'#FFFBEB',border:'1px solid #FDE68A',borderRadius:10,padding:'12px 16px',marginBottom:20}}>
+                    <div style={{fontSize:'0.72rem',fontWeight:700,color:'#92400E',marginBottom:4,textTransform:'uppercase',letterSpacing:'0.08em'}}>Notas</div>
+                    <div style={{fontSize:'0.84rem',color:'#78350F'}}>{job.notes}</div>
+                  </div>
+                )}
+
+                {/* Footer terms */}
+                <div style={{borderTop:'1px solid #E2E8F0',paddingTop:16,display:'flex',justifyContent:'space-between',alignItems:'flex-end'}}>
+                  <div style={{fontSize:'0.72rem',color:'#94A3B8',lineHeight:1.6,maxWidth:320}}>
+                    <div style={{fontWeight:700,color:'#64748B',marginBottom:4}}>Términos y Condiciones</div>
+                    El cobro es por horas trabajadas a la tarifa acordada. Los tiempos estimados pueden variar según las condiciones del día. Todos los artículos están cubiertos por seguro básico durante el transporte. El pago debe realizarse el día del servicio o según lo acordado.
+                  </div>
+                  <div style={{textAlign:'right'}}>
+                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'1rem',color:'#C9A84C'}}>🚛 YARITAO MOVING</div>
+                    <div style={{fontSize:'0.72rem',color:'#94A3B8',marginTop:2}}>¡Gracias por su preferencia!</div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
           </div>
-          <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'2rem',color:job.status==='paid'?'#16A34A':'#EA580C'}}>{$0(job.total)}</div>
-        </div>
-
-        {job.notes && <div style={{fontSize:'0.82rem',color:'#64748B',marginBottom:20,fontStyle:'italic'}}>Notas: {job.notes}</div>}
-
-        <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
-          <button onClick={()=>window.print()} style={{...S.btn,background:'#F1F5F9',color:'#374151',border:'1px solid #E2E8F0'}}>🖨 Imprimir</button>
-          <button onClick={onClose} style={{...S.btn,background:'#C9A84C',color:'#0A0C14',fontWeight:700}}>Cerrar</button>
         </div>
       </div>
     </div>
