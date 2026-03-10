@@ -219,12 +219,16 @@ function FinancialApp() {
   const now = new Date();
   const mo = now.getMonth(), yr = now.getFullYear();
 
-  const paidJobs = jobs.filter(j=>j.status==='paid');
-  const pendJobs  = jobs.filter(j=>j.status==='pending');
+  const paidJobs    = jobs.filter(j=>j.status==='paid');
+  const pendJobs    = jobs.filter(j=>j.status==='pending');
+  const partialJobs = jobs.filter(j=>j.status==='partial');
 
   const revenue   = paidJobs.reduce((s,j)=>s+j.total,0);
   const expenses  = exps.reduce((s,e)=>s+e.amount,0);
   const netProfit = revenue - expenses;
+
+  const anticipoTotal  = jobs.reduce((s,j)=>s+(j.anticipo||0),0);
+  const balancePending = [...pendJobs,...partialJobs].reduce((s,j)=>s+(j.total-(j.anticipo||0)),0);
 
   const moRev = paidJobs.filter(j=>{ const d=new Date(j.date); return d.getMonth()===mo&&d.getFullYear()===yr; }).reduce((s,j)=>s+j.total,0);
   const moExp = exps.filter(e=>{ const d=new Date(e.date); return d.getMonth()===mo&&d.getFullYear()===yr; }).reduce((s,e)=>s+e.amount,0);
@@ -374,9 +378,6 @@ function FinancialApp() {
 function Dashboard({chartData,expByCat,jobs,exps,moRev,moExp,netProfit,revenue,expenses,pendJobs,setScreen,setFilter,partialJobs,anticipoTotal,balancePending}) {
   const margin = pct(netProfit, revenue);
   const avgJob = jobs.filter(j=>j.status==='paid').length ? revenue/jobs.filter(j=>j.status==='paid').length : 0;
-  const partialJobs = jobs.filter(j=>j.status==='partial');
-  const anticipoTotal = jobs.reduce((s,j)=>s+(j.anticipo||0),0);
-  const balancePending = [...pendJobs,...partialJobs].reduce((s,j)=>s+(j.total-(j.anticipo||0)),0);
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:24}}>
