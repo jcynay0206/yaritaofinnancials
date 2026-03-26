@@ -186,6 +186,8 @@ function FinancialApp() {
   const [toast, setToast] = useState(null);
   const [sideOpen, setSideOpen] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [employees, setEmployees] = useState([]);
+  const [payrollRecords, setPayrollRecords] = useState([]);
 
   // ── Storage ────────────────────────────────────────────────────
   useEffect(() => {
@@ -197,19 +199,49 @@ function FinancialApp() {
           setJobs(d.jobs || S_JOBS);
           setExps(d.exps || S_EXP);
           if (d.cfg) setCfg(d.cfg);
-        } else { setJobs(S_JOBS); setExps(S_EXP); }
-      } catch { setJobs(S_JOBS); setExps(S_EXP); }
+          if (d.employees) setEmployees(d.employees);
+          else setEmployees([
+            { id:1, name:'Carlos Méndez', pos:'Mover principal', rate:120, filing:'single', periods:26 },
+            { id:2, name:'Luis Torres',   pos:'Ayudante',        rate:80,  filing:'single', periods:26 },
+          ]);
+          if (d.payrollRecords) setPayrollRecords(d.payrollRecords);
+        } else {
+          setJobs(S_JOBS); setExps(S_EXP);
+          setEmployees([
+            { id:1, name:'Carlos Méndez', pos:'Mover principal', rate:120, filing:'single', periods:26 },
+            { id:2, name:'Luis Torres',   pos:'Ayudante',        rate:80,  filing:'single', periods:26 },
+          ]);
+        }
+      } catch {
+        setJobs(S_JOBS); setExps(S_EXP);
+        setEmployees([
+          { id:1, name:'Carlos Méndez', pos:'Mover principal', rate:120, filing:'single', periods:26 },
+          { id:2, name:'Luis Torres',   pos:'Ayudante',        rate:80,  filing:'single', periods:26 },
+        ]);
+      }
       setReady(true);
     })();
   }, []);
 
-  const persist = useCallback(async (j,e,c) => {
-    try { localStorage.setItem(SK, JSON.stringify({jobs:j,exps:e,cfg:c})); } catch {}
+  const persist = useCallback(async (j,e,c,emp,pr) => {
+    try { localStorage.setItem(SK, JSON.stringify({jobs:j,exps:e,cfg:c,employees:emp,payrollRecords:pr})); } catch {}
   }, []);
 
-  const sJobs = j => { setJobs(j); persist(j,exps,cfg); };
-  const sExps = e => { setExps(e); persist(jobs,e,cfg); };
-  const sCfg  = c => { setCfg(c);  persist(jobs,exps,c); };
+  const sJobs = j => { setJobs(j); persist(j,exps,cfg,employees,payrollRecords); };
+  const sExps = e => { setExps(e); persist(jobs,e,cfg,employees,payrollRecords); };
+  const sCfg  = c => { setCfg(c);  persist(jobs,exps,c,employees,payrollRecords); };
+  const sEmployees = emp => { setEmployees(emp); persist(jobs,exps,cfg,emp,payrollRecords); };
+  const sPayroll = (pr, newExpense) => {
+    setPayrollRecords(pr);
+    // Auto-register as expense in P&L when payroll is processed
+    if (newExpense) {
+      const updated = [...exps, newExpense];
+      setExps(updated);
+      persist(jobs,updated,cfg,employees,pr);
+    } else {
+      persist(jobs,exps,cfg,employees,pr);
+    }
+  };
 
   const toast$ = msg => { setToast(msg); setTimeout(()=>setToast(null),3000); };
   const openModal = (type, item=null) => { setModal(type); setEditing(item); };
@@ -270,6 +302,7 @@ function FinancialApp() {
     expenses: <Expenses exps={exps} setExps={sExps} openModal={openModal} closeModal={closeModal} modal={modal} editing={editing} toast$={toast$} />,
     reports: <Reports jobs={jobs} exps={exps} revenue={revenue} expenses={expenses} netProfit={netProfit} expByCat={expByCat} />,
     taxes: <Taxes netProfit={netProfit} seTax={seTax} fedTax={fedTax} njTax={njTax} totalTax={totalTax} quarterly={quarterly} mileDeduct={mileDeduct} totalMiles={totalMiles} cfg={cfg} adjProfit={adjProfit} />,
+    nomina: <Nomina employees={employees} setEmployees={sEmployees} payrollRecords={payrollRecords} setPayrollRecords={sPayroll} toast$={toast$} />,
     settings: <Settings cfg={cfg} setCfg={sCfg} toast$={toast$} />,
   };
 
@@ -315,6 +348,7 @@ function FinancialApp() {
             {id:'expenses',icon:'💸',label:'Gastos'},
             {id:'reports',icon:'📄',label:'P&L Report'},
             {id:'taxes',icon:'🧾',label:'Impuestos'},
+            {id:'nomina',icon:'👥',label:'Nómina'},
           ].map(({id,icon,label})=>(
             <button key={id} className="nav-btn" onClick={()=>setScreen(id)} style={{display:'flex',alignItems:'center',gap:12,padding:sideOpen?'10px 14px':'10px 0',borderRadius:10,border:'none',background:screen===id?'rgba(201,168,76,0.12)':'transparent',color:screen===id?'#C9A84C':'#94A3B8',fontWeight:screen===id?600:400,fontSize:'0.88rem',textAlign:'left',width:'100%',justifyContent:sideOpen?'flex-start':'center',transition:'all 0.15s',cursor:'pointer'}}>
               <span className="nav-ico" style={{fontSize:'1rem',flexShrink:0,color:screen===id?'#C9A84C':'#64748B'}}>{icon}</span>
@@ -338,8 +372,8 @@ function FinancialApp() {
         <div style={{height:52,borderBottom:'1px solid rgba(255,255,255,0.05)',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 24px',flexShrink:0,background:'#0A0C14'}}>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
             <span style={{fontSize:'0.82rem',color:'#64748B'}}>
-              {['dashboard','jobs','expenses','reports','taxes','settings'].includes(screen) &&
-                ['📊 Dashboard','🚛 Mudanzas','💸 Gastos','📄 P&L Report','🧾 Impuestos','⚙️ Configuración'][['dashboard','jobs','expenses','reports','taxes','settings'].indexOf(screen)]
+              {['dashboard','jobs','expenses','reports','taxes','nomina','settings'].includes(screen) &&
+                ['📊 Dashboard','🚛 Mudanzas','💸 Gastos','📄 P&L Report','🧾 Impuestos','👥 Nómina','⚙️ Configuración'][['dashboard','jobs','expenses','reports','taxes','nomina','settings'].indexOf(screen)]
               }
             </span>
           </div>
@@ -1362,6 +1396,503 @@ function FG({label,children,style}) {
     <div style={{display:'flex',flexDirection:'column',...style}}>
       <label style={S.label}>{label}</label>
       {children}
+    </div>
+  );
+}
+
+// ══ NÓMINA MODULE ═════════════════════════════════════════════════
+
+// Tax helpers
+function nCalcFed(annual, filing) {
+  const std = filing === 'married' ? 30000 : 15000;
+  const taxable = Math.max(0, annual - std);
+  const b = filing === 'married'
+    ? [[0,23850,.10],[23850,96950,.12],[96950,206700,.22],[206700,394600,.24]]
+    : [[0,11925,.10],[11925,48475,.12],[48475,103350,.22],[103350,197300,.24]];
+  let t = 0;
+  for (const [mn,mx,r] of b) { if (taxable <= mn) break; t += (Math.min(taxable,mx)-mn)*r; }
+  return t;
+}
+function nCalcNJ(annual) {
+  const b = [[0,20000,.014],[20000,35000,.0175],[35000,40000,.0245],[40000,75000,.035],[75000,500000,.05525],[500000,Infinity,.0637]];
+  let t = 0;
+  for (const [mn,mx,r] of b) { if (annual <= mn) break; t += (Math.min(annual,mx)-mn)*r; }
+  return t;
+}
+function nCalcTaxes(gross, filing, periods) {
+  const ann = gross * periods;
+  const fed = nCalcFed(ann, filing) / periods;
+  const nj  = nCalcNJ(ann) / periods;
+  const ss  = gross * 0.062;
+  const med = gross * 0.0145;
+  const sdi = gross * 0.0026;
+  const fli = gross * 0.0009;
+  return { fed, nj, ss, med, sdi, fli, total: fed+nj+ss+med+sdi+fli };
+}
+const nFmt = n => '$'+parseFloat(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+const PMAP = {52:'Semanal',26:'Quincenal',24:'Semi-mensual',12:'Mensual'};
+
+// Shared dark-themed sub-components
+const NCard = ({children,style={}}) => (
+  <div style={{background:'#1A1D2E',border:'1px solid rgba(255,255,255,0.07)',borderRadius:14,padding:24,marginBottom:14,...style}}>{children}</div>
+);
+const NMetric = ({label,value,color='#F1F5F9'}) => (
+  <div style={{background:'rgba(255,255,255,0.04)',borderRadius:10,padding:'14px 16px'}}>
+    <div style={{fontSize:'0.72rem',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase',color:'#64748B',marginBottom:6}}>{label}</div>
+    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'1.5rem',color}}>{value}</div>
+  </div>
+);
+const NPBtn = ({children,onClick,style={}}) => (
+  <button onClick={onClick} style={{background:'#C9A84C',color:'#0A0C14',border:'none',borderRadius:8,padding:'9px 18px',fontFamily:'inherit',fontSize:'0.88rem',fontWeight:700,cursor:'pointer',...style}}>{children}</button>
+);
+const NSBtn = ({children,onClick,style={}}) => (
+  <button onClick={onClick} style={{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:8,padding:'9px 14px',fontFamily:'inherit',fontSize:'0.85rem',fontWeight:500,color:'#94A3B8',cursor:'pointer',...style}}>{children}</button>
+);
+const NInput = ({style={},...props}) => (
+  <input style={{width:'100%',background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:8,color:'#F1F5F9',fontFamily:'inherit',fontSize:'0.9rem',padding:'10px 14px',...style}} {...props}/>
+);
+const NSelect = ({children,style={},...props}) => (
+  <select style={{width:'100%',background:'#1A1D2E',border:'1px solid rgba(255,255,255,0.1)',borderRadius:8,color:'#F1F5F9',fontFamily:'inherit',fontSize:'0.9rem',padding:'10px 14px',...style}} {...props}>{children}</select>
+);
+const NTh = ({children,right=false}) => (
+  <th style={{textAlign:right?'right':'left',padding:'8px 14px',color:'#64748B',fontSize:'0.72rem',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase',borderBottom:'1px solid rgba(255,255,255,0.06)',background:'rgba(255,255,255,0.02)'}}>{children}</th>
+);
+const NTd = ({children,right=false,mono=false,style={}}) => (
+  <td style={{padding:'11px 14px',borderBottom:'1px solid rgba(255,255,255,0.04)',fontSize:'0.88rem',color:'#94A3B8',textAlign:right?'right':'left',fontFamily:mono?'monospace':'inherit',...style}}>{children}</td>
+);
+
+// ── W-2 printer ──────────────────────────────────────────────────
+function printW2(e, year) {
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><title>W-2 ${year} — ${e.empName}</title>
+  <style>body{font-family:Arial,sans-serif;padding:2rem;max-width:700px;margin:auto;font-size:13px}
+  .hdr{display:flex;justify-content:space-between;border-bottom:2px solid #111;padding-bottom:12px;margin-bottom:16px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;border:1px solid #d1d5db}
+  .box{border:1px solid #d1d5db;padding:8px 10px}
+  .bl{font-size:10px;color:#6b7280;margin:0 0 2px}.bn{font-size:10px;color:#9ca3af;margin:0 0 2px}
+  .bv{font-size:14px;font-weight:700;margin:0}.ir{display:flex;gap:16px;margin-bottom:6px}
+  .il{font-size:11px;color:#6b7280;min-width:160px}.ft{font-size:10px;color:#9ca3af;margin-top:14px;border-top:1px solid #e5e7eb;padding-top:8px}
+  </style></head><body>
+  <div class="hdr"><div><strong style="font-size:16px">Wage and Tax Statement — W-2</strong><br><span style="color:#6b7280">Tax Year ${year}</span></div>
+  <div style="text-align:right"><strong>Yaritao Moving LLC</strong><br><span style="color:#6b7280">New Jersey, NJ · EIN: XX-XXXXXXX</span></div></div>
+  <div style="margin-bottom:14px">
+  <div class="ir"><span class="il">Employee name:</span><strong>${e.empName}</strong></div>
+  <div class="ir"><span class="il">Position:</span>${e.pos||'—'}</div>
+  <div class="ir"><span class="il">Payroll periods processed:</span>${e.periods}</div>
+  <div class="ir"><span class="il">Total trips completed:</span>${e.trips}</div></div>
+  <div class="grid">
+  <div class="box"><p class="bn">Box 1</p><p class="bl">Wages, tips, other compensation</p><p class="bv">${nFmt(e.gross)}</p></div>
+  <div class="box"><p class="bn">Box 2</p><p class="bl">Federal income tax withheld</p><p class="bv">${nFmt(e.fed)}</p></div>
+  <div class="box"><p class="bn">Box 3</p><p class="bl">Social Security wages</p><p class="bv">${nFmt(e.gross)}</p></div>
+  <div class="box"><p class="bn">Box 4</p><p class="bl">Social Security tax withheld</p><p class="bv">${nFmt(e.ss)}</p></div>
+  <div class="box"><p class="bn">Box 5</p><p class="bl">Medicare wages and tips</p><p class="bv">${nFmt(e.gross)}</p></div>
+  <div class="box"><p class="bn">Box 6</p><p class="bl">Medicare tax withheld</p><p class="bv">${nFmt(e.med)}</p></div>
+  <div class="box"><p class="bn">Box 16</p><p class="bl">State wages (NJ)</p><p class="bv">${nFmt(e.gross)}</p></div>
+  <div class="box"><p class="bn">Box 17</p><p class="bl">State income tax (NJ)</p><p class="bv">${nFmt(e.nj)}</p></div>
+  <div class="box"><p class="bn">Box 19 — SDI</p><p class="bl">NJ SDI withheld</p><p class="bv">${nFmt(e.sdi)}</p></div>
+  <div class="box"><p class="bn">Box 19 — FLI</p><p class="bl">NJ FLI withheld</p><p class="bv">${nFmt(e.fli)}</p></div>
+  </div>
+  <p class="ft">Resumen de nómina interno. W-2 oficial debe ser presentado por un payroll provider certificado (Gusto, ADP) antes del 31 de enero.</p>
+  </body></html>`);
+  w.document.close(); w.print();
+}
+
+// Pay stub printer
+function printStubN(r) {
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><title>Pay Stub — Yaritao Moving</title>
+  <style>body{font-family:Arial,sans-serif;padding:2rem;max-width:600px;margin:auto;color:#111}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}td,th{padding:8px 10px;border-bottom:1px solid #e5e7eb;font-size:13px}
+  th{text-align:left;font-weight:600;background:#f9fafb}.right{text-align:right}.muted{color:#6b7280}.red{color:#dc2626}
+  .net{font-size:16px;font-weight:700}.hdr{display:flex;justify-content:space-between}
+  .ft{font-size:11px;color:#9ca3af;margin-top:1rem;border-top:1px solid #e5e7eb;padding-top:8px}
+  </style></head><body>
+  <div class="hdr"><div><strong style="font-size:16px">Yaritao Moving LLC</strong><br><span class="muted">New Jersey, NJ</span></div>
+  <div style="text-align:right"><strong>Pay Stub</strong><br><span class="muted">Emitido: ${r.date}</span></div></div>
+  <hr style="border:none;border-top:1px solid #e5e7eb;margin:1rem 0">
+  <table><tr><th>Empleado</th><th>Cargo</th><th>Período</th><th>Viajes</th></tr>
+  <tr><td>${r.empName}</td><td>${r.pos||'—'}</td><td>${r.start||'—'} → ${r.end||'—'}</td><td>${r.trips}</td></tr></table>
+  <table><tr><th>Concepto</th><th class="right">Monto</th></tr>
+  <tr><td>Pago bruto (${r.trips} viajes)</td><td class="right">${nFmt(r.gross)}</td></tr>
+  <tr><td class="muted" style="padding-left:20px">Federal Income Tax</td><td class="right red">(${nFmt(r.fed)})</td></tr>
+  <tr><td class="muted" style="padding-left:20px">NJ State Income Tax</td><td class="right red">(${nFmt(r.nj)})</td></tr>
+  <tr><td class="muted" style="padding-left:20px">Social Security (6.20%)</td><td class="right red">(${nFmt(r.ss)})</td></tr>
+  <tr><td class="muted" style="padding-left:20px">Medicare (1.45%)</td><td class="right red">(${nFmt(r.med)})</td></tr>
+  <tr><td class="muted" style="padding-left:20px">NJ SDI (0.26%)</td><td class="right red">(${nFmt(r.sdi)})</td></tr>
+  <tr><td class="muted" style="padding-left:20px">NJ FLI (0.09%)</td><td class="right red">(${nFmt(r.fli)})</td></tr>
+  <tr style="border-top:2px solid #111"><td><strong>Pago neto</strong></td><td class="right net">${nFmt(r.net)}</td></tr></table>
+  <p class="ft">Cálculos estimados según tasas vigentes 2025 (NJ/Federal). Consulte a su contador para confirmación oficial.</p>
+  </body></html>`);
+  w.document.close(); w.print();
+}
+
+// ── Pay stub view ─────────────────────────────────────────────────
+function NPayStubView({r, onClose}) {
+  return (
+    <div style={{background:'#0F1117',border:'1px solid rgba(255,255,255,0.06)',borderRadius:14,padding:24,marginTop:16}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
+        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:'1rem',color:'#F1F5F9'}}>Pay Stub</div>
+        <div style={{display:'flex',gap:8}}>
+          <NPBtn onClick={()=>printStubN(r)} style={{fontSize:'0.8rem',padding:'7px 14px'}}>Imprimir / PDF</NPBtn>
+          <NSBtn onClick={onClose} style={{fontSize:'0.8rem',padding:'7px 12px'}}>✕</NSBtn>
+        </div>
+      </div>
+      <div style={{display:'flex',justifyContent:'space-between',marginBottom:14,paddingBottom:14,borderBottom:'1px solid rgba(255,255,255,0.06)'}}>
+        <div><div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'1rem',color:'#C9A84C'}}>Yaritao Moving LLC</div><div style={{fontSize:'0.75rem',color:'#64748B'}}>New Jersey, NJ</div></div>
+        <div style={{textAlign:'right'}}><div style={{fontWeight:600,color:'#F1F5F9',fontSize:'0.88rem'}}>Emitido: {r.date}</div></div>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
+        {[['Empleado',r.empName],['Cargo',r.pos||'—'],['Período',`${r.start||'—'} → ${r.end||'—'}`],['Viajes',r.trips]].map(([k,v])=>(
+          <div key={k}><div style={{fontSize:'0.7rem',color:'#64748B',marginBottom:2,textTransform:'uppercase',letterSpacing:'0.06em'}}>{k}</div><div style={{fontSize:'0.88rem',color:'#F1F5F9'}}>{v}</div></div>
+        ))}
+      </div>
+      <table style={{width:'100%',borderCollapse:'collapse',marginBottom:12}}>
+        <thead><tr><NTh>Concepto</NTh><NTh right>Monto</NTh></tr></thead>
+        <tbody>
+          <NTd style={{padding:'11px 14px',color:'#F1F5F9'}}>Pago bruto ({r.trips} viajes)</NTd>
+          <NTd right mono style={{color:'#C9A84C',padding:'11px 14px'}}>{nFmt(r.gross)}</NTd>
+          {[['Federal Income Tax',r.fed],['NJ State Income Tax',r.nj],['Social Security (6.20%)',r.ss],['Medicare (1.45%)',r.med],['NJ SDI (0.26%)',r.sdi],['NJ FLI (0.09%)',r.fli]].map(([name,val])=>(
+            <tr key={name}><NTd style={{paddingLeft:28}}>{name}</NTd><NTd right mono style={{color:'#F87171'}}>({nFmt(val)})</NTd></tr>
+          ))}
+          <tr style={{borderTop:'1px solid rgba(201,168,76,0.3)'}}>
+            <NTd style={{color:'#F1F5F9',fontWeight:700}}>Pago neto</NTd>
+            <NTd right mono style={{color:'#4ADE80',fontSize:'1.1rem',fontWeight:700}}>{nFmt(r.net)}</NTd>
+          </tr>
+        </tbody>
+      </table>
+      <div style={{fontSize:'0.72rem',color:'#64748B'}}>Cálculos estimados según tasas vigentes 2025 (NJ/Federal).</div>
+    </div>
+  );
+}
+
+// ── Tab Empleados ─────────────────────────────────────────────────
+function NTabEmpleados({employees, setEmployees}) {
+  const [form, setForm] = useState({name:'',pos:'',rate:'',filing:'single',periods:'26'});
+  const add = () => {
+    if (!form.name.trim() || !form.rate) return;
+    setEmployees([...employees, {id:Date.now(),name:form.name.trim(),pos:form.pos.trim(),rate:parseFloat(form.rate),filing:form.filing,periods:parseInt(form.periods)}]);
+    setForm({name:'',pos:'',rate:'',filing:'single',periods:'26'});
+  };
+  return (
+    <div>
+      <NCard>
+        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:'0.95rem',color:'#F1F5F9',marginBottom:16}}>Agregar empleado</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:10,marginBottom:14}}>
+          <NInput placeholder="Nombre completo" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
+          <NInput placeholder="Cargo" value={form.pos} onChange={e=>setForm({...form,pos:e.target.value})}/>
+          <NInput type="number" placeholder="$ por viaje" value={form.rate} onChange={e=>setForm({...form,rate:e.target.value})}/>
+          <NSelect value={form.filing} onChange={e=>setForm({...form,filing:e.target.value})}>
+            <option value="single">Soltero/a (Single)</option>
+            <option value="married">Casado/a (Married)</option>
+          </NSelect>
+          <NSelect value={form.periods} onChange={e=>setForm({...form,periods:e.target.value})}>
+            <option value="52">Semanal (52/año)</option>
+            <option value="26">Quincenal (26/año)</option>
+            <option value="24">Semi-mensual (24/año)</option>
+            <option value="12">Mensual (12/año)</option>
+          </NSelect>
+        </div>
+        <NPBtn onClick={add}>+ Agregar empleado</NPBtn>
+      </NCard>
+      <NCard>
+        <table style={{width:'100%',borderCollapse:'collapse'}}>
+          <thead><tr><NTh>Nombre</NTh><NTh>Cargo</NTh><NTh right>$ / viaje</NTh><NTh>Estado civil</NTh><NTh>Frecuencia</NTh><NTh></NTh></tr></thead>
+          <tbody>
+            {employees.length===0 ? (
+              <tr><td colSpan={6} style={{padding:'2rem',textAlign:'center',color:'#64748B',fontSize:'0.85rem'}}>No hay empleados aún</td></tr>
+            ) : employees.map(e=>(
+              <tr key={e.id} className="row">
+                <NTd style={{color:'#F1F5F9'}}>{e.name}</NTd>
+                <NTd>{e.pos||'—'}</NTd>
+                <NTd right mono style={{color:'#C9A84C'}}>{nFmt(e.rate)}</NTd>
+                <NTd>{e.filing==='married'?'Casado/a':'Soltero/a'}</NTd>
+                <NTd>{PMAP[e.periods]}</NTd>
+                <NTd><NSBtn onClick={()=>setEmployees(employees.filter(x=>x.id!==e.id))} style={{padding:'4px 10px',fontSize:'0.78rem'}}>Eliminar</NSBtn></NTd>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </NCard>
+    </div>
+  );
+}
+
+// ── Tab Nueva Nómina ──────────────────────────────────────────────
+function NTabNomina({employees, payrollRecords, setPayrollRecords, toast$}) {
+  const today = new Date().toISOString().split('T')[0];
+  const [empId, setEmpId] = useState(employees[0]?.id||'');
+  const [start, setStart] = useState(today);
+  const [end, setEnd] = useState(today);
+  const [trips, setTrips] = useState('');
+  const [stub, setStub] = useState(null);
+
+  const emp = employees.find(e=>e.id===parseInt(empId));
+  const gross = emp && trips ? emp.rate*parseInt(trips) : 0;
+  const taxes = emp && gross>0 ? nCalcTaxes(gross, emp.filing, emp.periods) : null;
+  const ann = gross*(emp?.periods||26);
+
+  const process = () => {
+    if (!emp || !taxes || !trips) return;
+    const r = {
+      id: Date.now(), empId:emp.id, empName:emp.name, pos:emp.pos,
+      start, end, trips:parseInt(trips), gross,
+      fed:taxes.fed, nj:taxes.nj, ss:taxes.ss, med:taxes.med, sdi:taxes.sdi, fli:taxes.fli,
+      total:taxes.total, net:gross-taxes.total,
+      date: new Date().toLocaleDateString('es-US')
+    };
+    const expEntry = { id:'nm'+Date.now(), date:start||today, cat:'Nómina', vendor:emp.name, amount:gross, notes:`Pay stub · ${parseInt(trips)} viajes · ${start||today}` };
+    setPayrollRecords([r,...payrollRecords], expEntry);
+    setTrips(''); setStub(null);
+    toast$(`Nómina de ${emp.name} procesada y registrada en gastos`);
+  };
+
+  return (
+    <div>
+      <NCard>
+        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:'0.95rem',color:'#F1F5F9',marginBottom:16}}>Calcular nómina</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:10,marginBottom:14}}>
+          <div><label style={S.label}>Empleado</label>
+            <NSelect value={empId} onChange={e=>setEmpId(e.target.value)}>
+              {employees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+            </NSelect>
+          </div>
+          <div><label style={S.label}>Fecha inicio</label><NInput type="date" value={start} onChange={e=>setStart(e.target.value)}/></div>
+          <div><label style={S.label}>Fecha fin</label><NInput type="date" value={end} onChange={e=>setEnd(e.target.value)}/></div>
+          <div><label style={S.label}>Viajes completados</label><NInput type="number" placeholder="0" min="0" value={trips} onChange={e=>setTrips(e.target.value)}/></div>
+        </div>
+
+        {taxes && gross>0 && (
+          <div style={{borderTop:'1px solid rgba(255,255,255,0.06)',paddingTop:18,marginTop:6}}>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:10,marginBottom:16}}>
+              <NMetric label="Pago bruto" value={nFmt(gross)} color="#C9A84C"/>
+              <NMetric label="Deducciones" value={nFmt(taxes.total)} color="#F87171"/>
+              <NMetric label="Pago neto" value={nFmt(gross-taxes.total)} color="#4ADE80"/>
+            </div>
+            <table style={{width:'100%',borderCollapse:'collapse',marginBottom:16}}>
+              <thead><tr><NTh>Deducción</NTh><NTh right>Tasa efectiva</NTh><NTh right>Monto</NTh></tr></thead>
+              <tbody>
+                {[
+                  ['Federal Income Tax',`${(nCalcFed(ann,emp.filing)/ann*100).toFixed(1)}%`,taxes.fed],
+                  ['NJ State Income Tax',`${(nCalcNJ(ann)/ann*100).toFixed(1)}%`,taxes.nj],
+                  ['Social Security (OASDI)','6.20%',taxes.ss],
+                  ['Medicare','1.45%',taxes.med],
+                  ['NJ SDI','0.26%',taxes.sdi],
+                  ['NJ FLI','0.09%',taxes.fli],
+                ].map(([name,rate,amount])=>(
+                  <tr key={name} className="row">
+                    <NTd style={{color:'#F1F5F9'}}>{name}</NTd>
+                    <NTd right>{rate}</NTd>
+                    <NTd right mono style={{color:'#F87171'}}>{nFmt(amount)}</NTd>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+              <NPBtn onClick={process}>✓ Procesar nómina → registrar en P&L</NPBtn>
+              <NSBtn onClick={()=>setStub({empName:emp.name,pos:emp.pos,start,end,trips:parseInt(trips),gross,...taxes,net:gross-taxes.total,date:new Date().toLocaleDateString('es-US')})}>Vista previa pay stub</NSBtn>
+            </div>
+          </div>
+        )}
+      </NCard>
+      {stub && <NPayStubView r={stub} onClose={()=>setStub(null)}/>}
+    </div>
+  );
+}
+
+// ── Tab Historial ─────────────────────────────────────────────────
+function NTabHistorial({payrollRecords}) {
+  const [stub, setStub] = useState(null);
+  const tg = payrollRecords.reduce((a,r)=>a+r.gross,0);
+  const tn = payrollRecords.reduce((a,r)=>a+r.net,0);
+  const tt = payrollRecords.reduce((a,r)=>a+r.total,0);
+
+  return (
+    <div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',gap:12,marginBottom:16}}>
+        <NMetric label="Total bruto pagado" value={nFmt(tg)} color="#C9A84C"/>
+        <NMetric label="Total neto pagado" value={nFmt(tn)} color="#4ADE80"/>
+        <NMetric label="Taxes retenidos" value={nFmt(tt)} color="#F87171"/>
+        <NMetric label="Períodos procesados" value={payrollRecords.length} color="#60A5FA"/>
+      </div>
+      <NCard>
+        <table style={{width:'100%',borderCollapse:'collapse'}}>
+          <thead><tr><NTh>Período</NTh><NTh>Empleado</NTh><NTh right>Viajes</NTh><NTh right>Bruto</NTh><NTh right>Deducciones</NTh><NTh right>Neto</NTh><NTh></NTh></tr></thead>
+          <tbody>
+            {payrollRecords.length===0 ? (
+              <tr><td colSpan={7} style={{padding:'2rem',textAlign:'center',color:'#64748B',fontSize:'0.85rem'}}>Sin registros — procesa tu primera nómina</td></tr>
+            ) : payrollRecords.map(r=>(
+              <tr key={r.id} className="row">
+                <NTd style={{fontSize:'0.78rem'}}>{r.start||'—'} → {r.end||'—'}</NTd>
+                <NTd style={{color:'#F1F5F9'}}>{r.empName}</NTd>
+                <NTd right style={{color:'#F1F5F9'}}>{r.trips}</NTd>
+                <NTd right mono style={{color:'#C9A84C'}}>{nFmt(r.gross)}</NTd>
+                <NTd right mono style={{color:'#F87171'}}>{nFmt(r.total)}</NTd>
+                <NTd right mono style={{color:'#4ADE80'}}>{nFmt(r.net)}</NTd>
+                <NTd><NSBtn onClick={()=>setStub(r)} style={{padding:'4px 10px',fontSize:'0.78rem'}}>Pay stub</NSBtn></NTd>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div style={{fontSize:'0.75rem',color:'#64748B',marginTop:12}}>✓ Cada nómina procesada se registra automáticamente como gasto de Nómina en el P&L.</div>
+      </NCard>
+      {stub && <NPayStubView r={stub} onClose={()=>setStub(null)}/>}
+    </div>
+  );
+}
+
+// ── Tab Reporte Empleador ─────────────────────────────────────────
+function NTabReporte({payrollRecords, employees}) {
+  const tg   = payrollRecords.reduce((a,r)=>a+r.gross,0);
+  const tss  = payrollRecords.reduce((a,r)=>a+r.ss,0);
+  const tmed = payrollRecords.reduce((a,r)=>a+r.med,0);
+  const ec   = Math.max(1,employees.length);
+  const futa = Math.min(tg,7000*ec)*0.006;
+  const sui  = Math.min(tg,42300*ec)*0.017;
+  const wf   = Math.min(tg,42300*ec)*0.000425;
+  const total = tss+tmed+futa+sui+wf;
+
+  return (
+    <div>
+      <NCard>
+        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:'0.95rem',color:'#F1F5F9',marginBottom:4}}>Taxes a cargo del empleador</div>
+        <div style={{fontSize:'0.8rem',color:'#64748B',marginBottom:16}}>Acumulado basado en la nómina procesada</div>
+        <table style={{width:'100%',borderCollapse:'collapse'}}>
+          <thead><tr><NTh>Concepto</NTh><NTh right>Tasa</NTh><NTh right>Base salarial</NTh><NTh right>Monto</NTh></tr></thead>
+          <tbody>
+            {[
+              ['SS match empleador','6.20%',nFmt(tg),nFmt(tss)],
+              ['Medicare match empleador','1.45%',nFmt(tg),nFmt(tmed)],
+              ['FUTA (Federal Unemployment)','0.60%*',nFmt(Math.min(tg,7000*ec)),nFmt(futa)],
+              ['NJ SUI (State Unemployment)','1.70%**',nFmt(Math.min(tg,42300*ec)),nFmt(sui)],
+              ['NJ Workforce Development','0.0425%',nFmt(Math.min(tg,42300*ec)),nFmt(wf)],
+            ].map(([name,rate,base,amount])=>(
+              <tr key={name} className="row">
+                <NTd style={{color:'#F1F5F9'}}>{name}</NTd>
+                <NTd right>{rate}</NTd>
+                <NTd right mono>{base}</NTd>
+                <NTd right mono style={{color:'#F87171'}}>{amount}</NTd>
+              </tr>
+            ))}
+            <tr style={{borderTop:'1px solid rgba(201,168,76,0.3)'}}>
+              <td colSpan={3} style={{padding:'12px 14px',fontWeight:700,color:'#F1F5F9',fontSize:'0.88rem'}}>Total a cargo del empleador</td>
+              <NTd right mono style={{color:'#C9A84C',fontWeight:700,fontSize:'1rem'}}>{nFmt(total)}</NTd>
+            </tr>
+          </tbody>
+        </table>
+      </NCard>
+      <NCard style={{background:'rgba(201,168,76,0.06)',border:'1px solid rgba(201,168,76,0.2)'}}>
+        <div style={{fontWeight:700,fontSize:'0.88rem',color:'#C9A84C',marginBottom:6}}>Depósitos federales — vencimiento mensual</div>
+        <div style={{fontSize:'0.82rem',color:'#94A3B8',lineHeight:1.6}}>Como empleador nuevo (&lt;$50K en taxes anuales), los depósitos son <strong style={{color:'#F1F5F9'}}>mensuales</strong> — vencen el día 15 del mes siguiente vía <strong style={{color:'#F1F5F9'}}>EFTPS.gov</strong>.<br/>
+        Total acumulado employer taxes: <span style={{color:'#C9A84C',fontWeight:700}}>{nFmt(total)}</span></div>
+        <div style={{fontSize:'0.72rem',color:'#64748B',marginTop:8}}>* FUTA reducida por crédito SUI. ** NJ SUI tasa nueva empresa — verificar con NJ DOL cada año.</div>
+      </NCard>
+    </div>
+  );
+}
+
+// ── Tab W-2 ───────────────────────────────────────────────────────
+function NTabW2({payrollRecords, employees}) {
+  const currentYear = String(new Date().getFullYear());
+  const [year, setYear] = useState(currentYear);
+  const years = [...new Set(payrollRecords.map(r=>(r.start||r.date||currentYear).slice(0,4)))].sort((a,b)=>b-a);
+  if (!years.includes(currentYear)) years.unshift(currentYear);
+
+  const byEmp = {};
+  payrollRecords.forEach(r=>{
+    const y = (r.start||r.date||currentYear).slice(0,4);
+    if (y !== year) return;
+    if (!byEmp[r.empId]) byEmp[r.empId]={empId:r.empId,empName:r.empName,pos:r.pos||'',periods:0,trips:0,gross:0,fed:0,ss:0,med:0,nj:0,sdi:0,fli:0};
+    const e=byEmp[r.empId]; e.periods++; e.trips+=r.trips; e.gross+=r.gross;
+    e.fed+=r.fed; e.ss+=r.ss; e.med+=r.med; e.nj+=r.nj; e.sdi+=r.sdi; e.fli+=r.fli;
+  });
+  const empList = Object.values(byEmp);
+
+  return (
+    <div>
+      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
+        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:'0.95rem',color:'#F1F5F9'}}>Resumen W-2 por empleado</div>
+        <NSelect value={year} onChange={e=>setYear(e.target.value)} style={{width:'auto'}}>
+          {years.map(y=><option key={y} value={y}>{y}</option>)}
+        </NSelect>
+      </div>
+      {empList.length===0 ? (
+        <NCard>
+          <div style={{textAlign:'center',color:'#64748B',padding:'2rem 0',fontSize:'0.88rem'}}>Sin registros de nómina para {year}. Procesa nóminas primero.</div>
+        </NCard>
+      ) : empList.map(e=>(
+        <NCard key={e.empId}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
+            <div>
+              <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'1rem',color:'#F1F5F9'}}>{e.empName}</div>
+              <div style={{fontSize:'0.75rem',color:'#64748B',marginTop:2}}>{e.pos||'—'} · {e.periods} períodos · {e.trips} viajes · Tax year {year}</div>
+            </div>
+            <NPBtn onClick={()=>printW2(e,year)} style={{fontSize:'0.8rem',padding:'7px 14px'}}>Imprimir W-2</NPBtn>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:1,border:'1px solid rgba(255,255,255,0.06)',borderRadius:8,overflow:'hidden'}}>
+            {[
+              ['Box 1 — Wages',e.gross,'Salario bruto total'],
+              ['Box 2 — Fed withheld',e.fed,'Federal income tax'],
+              ['Box 3 — SS wages',e.gross,'Social Security wages'],
+              ['Box 4 — SS withheld',e.ss,'SS tax retenido (6.2%)'],
+              ['Box 5 — Medicare wages',e.gross,'Medicare wages'],
+              ['Box 6 — Medicare',e.med,'Medicare retenido (1.45%)'],
+              ['Box 16 — NJ wages',e.gross,'Salario estatal NJ'],
+              ['Box 17 — NJ tax',e.nj,'NJ income tax retenido'],
+              ['Box 19 — SDI',e.sdi,'NJ SDI retenido'],
+              ['Box 19 — FLI',e.fli,'NJ FLI retenido'],
+            ].map(([box,val,desc])=>(
+              <div key={box} style={{padding:'10px 14px',background:'rgba(255,255,255,0.02)',borderRight:'1px solid rgba(255,255,255,0.04)',borderBottom:'1px solid rgba(255,255,255,0.04)'}}>
+                <div style={{fontSize:'0.68rem',color:'#64748B',letterSpacing:'0.08em',marginBottom:4,textTransform:'uppercase'}}>{box}</div>
+                <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'1rem',color:'#C9A84C',marginBottom:2}}>{nFmt(val)}</div>
+                <div style={{fontSize:'0.72rem',color:'#64748B'}}>{desc}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{fontSize:'0.72rem',color:'#64748B',marginTop:10}}>Acumulado de {e.periods} {e.periods===1?'período':'períodos'} procesados en {year}.</div>
+        </NCard>
+      ))}
+      <NCard style={{background:'rgba(248,113,113,0.06)',border:'1px solid rgba(248,113,113,0.2)'}}>
+        <div style={{fontWeight:700,fontSize:'0.88rem',color:'#F87171',marginBottom:6}}>⚠ W-2 oficial — deadline 31 de enero</div>
+        <div style={{fontSize:'0.82rem',color:'#94A3B8',lineHeight:1.6}}>Este resumen es para control interno. El W-2 oficial debe enviarse al empleado y al IRS usando un payroll provider certificado como <strong style={{color:'#F1F5F9'}}>Gusto</strong> (~$40/mes) o <strong style={{color:'#F1F5F9'}}>ADP</strong>. El EIN del negocio es obligatorio para presentar.</div>
+      </NCard>
+    </div>
+  );
+}
+
+// ══ NÓMINA MAIN COMPONENT ═════════════════════════════════════════
+function Nomina({employees, setEmployees, payrollRecords, setPayrollRecords, toast$}) {
+  const [tab, setTab] = useState('empleados');
+  const TABS = [
+    {id:'empleados',label:'👤 Empleados'},
+    {id:'nomina',label:'🧮 Nueva nómina'},
+    {id:'historial',label:'📋 Historial'},
+    {id:'reporte',label:'🏢 Reporte empleador'},
+    {id:'w2',label:'📑 W-2 Anual'},
+  ];
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:20}}>
+      <div>
+        <h1 style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'1.6rem',color:'#F1F5F9',marginBottom:4}}>Nómina</h1>
+        <p style={{color:'#64748B',fontSize:'0.88rem'}}>Cálculo automático de taxes federales y NJ · Pago por viaje · 2025</p>
+      </div>
+
+      {/* Tab bar */}
+      <div style={{display:'flex',gap:2,borderBottom:'1px solid rgba(255,255,255,0.06)',paddingBottom:0,flexWrap:'wrap'}}>
+        {TABS.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} className="nav-btn" style={{background:'none',border:'none',borderBottom:tab===t.id?'2px solid #C9A84C':'2px solid transparent',padding:'8px 16px',fontFamily:'inherit',fontSize:'0.85rem',cursor:'pointer',color:tab===t.id?'#C9A84C':'#64748B',fontWeight:tab===t.id?600:400,marginBottom:-1,transition:'all 0.15s'}}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="fade" key={tab}>
+        {tab==='empleados' && <NTabEmpleados employees={employees} setEmployees={setEmployees}/>}
+        {tab==='nomina'    && <NTabNomina employees={employees} payrollRecords={payrollRecords} setPayrollRecords={setPayrollRecords} toast$={toast$}/>}
+        {tab==='historial' && <NTabHistorial payrollRecords={payrollRecords}/>}
+        {tab==='reporte'   && <NTabReporte payrollRecords={payrollRecords} employees={employees}/>}
+        {tab==='w2'        && <NTabW2 payrollRecords={payrollRecords} employees={employees}/>}
+      </div>
     </div>
   );
 }
