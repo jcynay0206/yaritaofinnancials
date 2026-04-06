@@ -11,7 +11,56 @@ const PASSWORD  = 'Yaritao2025!'; // ← Cambia tu contraseña aquí
 const RATE = 150;
 const MILE_RATE = 0.89;
 const IRS_MI = 0.67;
-const TRUCK = { studio: 90, '2br': 130, '3br': 175, '4br': 235 };
+// ── Truck specs UHaul (precios aproximados mercado NJ) ──────────
+const TRUCK_SPECS = {
+  '10ft': { label:'10 ft (Cargo Van)', ratePerDay:19.95, ratePerMile:0.79, insurancePerDay:14,
+    oneWayBase:{ under50:149, r50_200:199, r200_500:349, r500p:599 } },
+  '15ft': { label:'15 ft',            ratePerDay:29.95, ratePerMile:0.79, insurancePerDay:14,
+    oneWayBase:{ under50:199, r50_200:299, r200_500:499, r500p:849 } },
+  '20ft': { label:'20 ft',            ratePerDay:39.95, ratePerMile:0.79, insurancePerDay:14,
+    oneWayBase:{ under50:299, r50_200:449, r200_500:699, r500p:1099 } },
+  '26ft': { label:'26 ft (más grande)',ratePerDay:49.95, ratePerMile:0.79, insurancePerDay:14,
+    oneWayBase:{ under50:449, r50_200:699, r200_500:999, r500p:1599 } },
+};
+const HOME_TO_TRUCK = { studio:'10ft', '1br':'15ft', '2br':'20ft', '3br':'26ft', '4br':'26ft', '5br':'26ft' };
+const HOME_NOTES = {
+  '4br':'⚠️ Puede requerir 2 viajes según volumen.',
+  '5br':'⚠️ Muy probablemente 2 viajes. Confirmar con cliente.',
+};
+
+function calcUHaul(truckKey, moveType, miles, days, insurance) {
+  const t = TRUCK_SPECS[truckKey]; if (!t) return 0;
+  let sub = 0;
+  if (moveType === 'local') {
+    sub = t.ratePerDay * days + miles * t.ratePerMile;
+  } else {
+    const m = parseFloat(miles)||0;
+    const base = m < 50 ? t.oneWayBase.under50 : m < 200 ? t.oneWayBase.r50_200 : m < 500 ? t.oneWayBase.r200_500 : t.oneWayBase.r500p;
+    sub = base + Math.max(0, days-1) * t.ratePerDay;
+  }
+  const ins = insurance ? t.insurancePerDay * days : 0;
+  return Math.round(sub + ins);
+}
+
+// ORS geocode + directions (API key en .env como VITE_ORS_API_KEY)
+async function orsGetMiles(pickup, delivery) {
+  const KEY = import.meta.env.VITE_ORS_API_KEY;
+  if (!KEY) throw new Error('Falta VITE_ORS_API_KEY en .env');
+  const geo = async (addr) => {
+    const r = await fetch(`https://api.openrouteservice.org/geocode/search?api_key=${KEY}&text=${encodeURIComponent(addr)}&boundary.country=US&size=1`);
+    const d = await r.json();
+    if (!d.features?.length) throw new Error(`Dirección no encontrada: "${addr}"`);
+    return d.features[0].geometry.coordinates;
+  };
+  const [o, dest] = await Promise.all([geo(pickup), geo(delivery)]);
+  const r = await fetch(`https://api.openrouteservice.org/v2/directions/driving-car?api_key=${KEY}&start=${o[0]},${o[1]}&end=${dest[0]},${dest[1]}`);
+  const d = await r.json();
+  const seg = d.features?.[0]?.properties?.segments?.[0];
+  if (!seg) throw new Error('No se pudo calcular la ruta');
+  const miles = parseFloat((seg.distance / 1609.344).toFixed(1));
+  const mins  = Math.round(seg.duration / 60);
+  return { miles, mins };
+}
 const E_CATS = ['Combustible','Alquiler camión','Nómina','Seguro','Marketing','Suministros','Mantenimiento','Peajes','Otro'];
 const MO = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const PIE_C = ['#C9A84C','#60A5FA','#4ADE80','#F87171','#A78BFA','#FB923C','#34D399','#F472B6','#94A3B8'];
@@ -33,7 +82,11 @@ const fmtDate = s => { if(!s) return '—'; const d=new Date(s+'T12:00:00'); ret
 
 function jobTotal(j) {
   const labor = (j.movers||2)*(j.hours||3)*(j.rate||RATE);
-  const truck = TRUCK[j.size||'2br']||130;
+  // Si ya tiene truckCost calculado dinámicamente lo usa; si no, fallback a estimado base por tamaño
+  const fallbackTruck = { studio:90, '1br':120, '2br':160, '3br':210, '4br':280, '5br':320 };
+  const truck = j.truckCost != null && j.truckCost !== ''
+    ? parseFloat(j.truckCost)
+    : (fallbackTruck[j.size||'2br'] || 160);
   const miles = Math.round((j.miles||0)*MILE_RATE);
   const pack  = j.packing ? 350 : 0;
   const stor  = j.storage ? 200 : 0;
@@ -585,8 +638,41 @@ function Jobs({jobs,setJobs,openModal,closeModal,modal,editing,setViewing,filter
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(null);
   const [search, setSearch] = useState('');
+  const [orsLoading, setOrsLoading] = useState(false);
+  const [orsError, setOrsError] = useState('');
 
-  const emptyForm = { client:'',phone:'',date:tod(),origin:'',dest:'',type:'local',size:'2br',movers:3,hours:3,miles:15,rate:cfg.rate||150,packing:false,storage:false,notes:'',status:'pending',anticipo:0,payMethod:'Zelle',payLink:'' };
+  // Cuando cambia tamaño de hogar → sugerir truck automáticamente
+  const handleSizeChange = (size, currentForm) => {
+    const suggested = HOME_TO_TRUCK[size] || '20ft';
+    const newForm = { ...currentForm, size, truckSize: suggested };
+    const cost = calcUHaul(suggested, newForm.moveType, newForm.miles||0, newForm.rentalDays||1, newForm.includeInsurance);
+    setForm({ ...newForm, truckCost: cost });
+  };
+
+  // Cuando cambia cualquier parámetro de UHaul → recalcular costo
+  const handleUHaulChange = (field, value, currentForm) => {
+    const updated = { ...currentForm, [field]: value };
+    const cost = calcUHaul(updated.truckSize, updated.moveType, updated.miles||0, updated.rentalDays||1, updated.includeInsurance);
+    setForm({ ...updated, truckCost: cost });
+  };
+
+  // Calcular millas con ORS
+  const handleCalcMiles = async () => {
+    setOrsError('');
+    if (!form.origin || !form.dest) return setOrsError('Ingresa origen y destino primero');
+    setOrsLoading(true);
+    try {
+      const { miles, mins } = await orsGetMiles(form.origin, form.dest);
+      const h = Math.floor(mins/60), m = mins%60;
+      const dur = h > 0 ? `${h}h ${m}min` : `${m}min`;
+      const cost = calcUHaul(form.truckSize, form.moveType, miles, form.rentalDays||1, form.includeInsurance);
+      setForm(f => ({ ...f, miles, tripDuration: dur, truckCost: cost }));
+    } catch(e) { setOrsError(e.message); }
+    finally { setOrsLoading(false); }
+  };
+
+  const emptyForm = { client:'',phone:'',date:tod(),origin:'',dest:'',type:'local',size:'2br',movers:3,hours:3,miles:15,rate:cfg.rate||150,packing:false,storage:false,notes:'',status:'pending',anticipo:0,payMethod:'Zelle',payLink:'',
+    truckSize:'20ft', moveType:'local', rentalDays:1, includeInsurance:true, truckCost:'', tripDuration:'' };
 
   useEffect(() => {
     if (modal==='job') { setForm(editing ? {...editing} : emptyForm); setShowForm(true); }
@@ -720,15 +806,85 @@ function Jobs({jobs,setJobs,openModal,closeModal,modal,editing,setViewing,filter
               <option value="local">Local (dentro de NJ)</option>
               <option value="interstate">Interestatal (fuera de NJ)</option>
             </select></FG>
-            <FG label="Origen *"><input style={S.input} value={form.origin} onChange={e=>setForm({...form,origin:e.target.value})} placeholder="Ciudad, Estado"/></FG>
-            <FG label="Destino *"><input style={S.input} value={form.dest} onChange={e=>setForm({...form,dest:e.target.value})} placeholder="Ciudad, Estado"/></FG>
-            <FG label="Tamaño del hogar"><select style={S.input} value={form.size} onChange={e=>setForm({...form,size:e.target.value})}>
-              <option value="studio">Estudio / 1 habitación</option>
-              <option value="2br">2 habitaciones</option>
-              <option value="3br">3 habitaciones</option>
-              <option value="4br">4+ habitaciones</option>
-            </select></FG>
-            <FG label="Millas recorridas"><input type="number" style={S.input} value={form.miles} onChange={e=>setForm({...form,miles:+e.target.value})} min={0}/></FG>
+
+            {/* ── Origen y destino con botón de cálculo de millas ── */}
+            <div style={{gridColumn:'1/-1',display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+              <FG label="📍 Dirección de Pickup *">
+                <input style={S.input} value={form.origin} onChange={e=>setForm({...form,origin:e.target.value})} placeholder="123 Main St, Newark, NJ 07102"/>
+              </FG>
+              <FG label="🏁 Dirección de Delivery *">
+                <input style={S.input} value={form.dest} onChange={e=>setForm({...form,dest:e.target.value})} placeholder="456 Oak Ave, Jersey City, NJ 07306"/>
+              </FG>
+            </div>
+            <div style={{gridColumn:'1/-1',display:'flex',gap:12,alignItems:'center',flexWrap:'wrap',marginTop:-6}}>
+              <button type="button" onClick={handleCalcMiles}
+                disabled={orsLoading || !form.origin || !form.dest}
+                style={{...S.btn, background: orsLoading||!form.origin||!form.dest ?'#2a2a2a':'#C9A84C', color: orsLoading||!form.origin||!form.dest?'#666':'#0A0C14', fontSize:'0.82rem', padding:'8px 16px'}}>
+                {orsLoading ? '⏳ Calculando...' : '🗺️ Calcular Millas Automático'}
+              </button>
+              {form.miles > 0 && (
+                <div style={{background:'rgba(74,222,128,0.08)',border:'1px solid rgba(74,222,128,0.2)',borderRadius:6,padding:'6px 12px',fontSize:'0.82rem',color:'#4ADE80',display:'flex',gap:12}}>
+                  <span>🛣️ <strong>{form.miles} millas</strong></span>
+                  {form.tripDuration && <span>⏱️ ~{form.tripDuration}</span>}
+                </div>
+              )}
+              {orsError && <span style={{color:'#F87171',fontSize:'0.8rem'}}>⚠️ {orsError}</span>}
+            </div>
+
+            {/* ── Millas manual (por si prefiere escribir) ── */}
+            <FG label="Millas recorridas (auto o manual)">
+              <input type="number" style={S.input} value={form.miles} onChange={e=>{ const m=+e.target.value; const cost=calcUHaul(form.truckSize,form.moveType,m,form.rentalDays||1,form.includeInsurance); setForm({...form,miles:m,truckCost:cost}); }} min={0}/>
+            </FG>
+
+            {/* ── Tamaño del hogar → sugiere truck automáticamente ── */}
+            <FG label="Tamaño del hogar">
+              <select style={S.input} value={form.size} onChange={e=>handleSizeChange(e.target.value,form)}>
+                <option value="studio">Studio / 1 cuarto</option>
+                <option value="1br">1 Bedroom</option>
+                <option value="2br">2 Bedrooms</option>
+                <option value="3br">3 Bedrooms</option>
+                <option value="4br">4 Bedrooms</option>
+                <option value="5br">5+ Bedrooms</option>
+              </select>
+            </FG>
+
+            {/* ── Truck UHaul ── */}
+            <div style={{gridColumn:'1/-1',background:'rgba(201,168,76,0.04)',border:'1px solid rgba(201,168,76,0.15)',borderRadius:10,padding:'14px 16px',display:'flex',flexDirection:'column',gap:12}}>
+              <div style={{fontSize:'0.75rem',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase',color:'#C9A84C'}}>
+                🚛 Truck UHaul {HOME_NOTES[form.size] ? <span style={{color:'#FB923C',fontWeight:400,textTransform:'none',fontSize:'0.76rem',marginLeft:6}}>{HOME_NOTES[form.size]}</span> : null}
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                <FG label="Tamaño del truck (auto-sugerido)">
+                  <select style={S.input} value={form.truckSize||'20ft'} onChange={e=>handleUHaulChange('truckSize',e.target.value,form)}>
+                    {Object.entries(TRUCK_SPECS).map(([k,v])=>(
+                      <option key={k} value={k}>{v.label} {HOME_TO_TRUCK[form.size]===k?' ✦':''}</option>
+                    ))}
+                  </select>
+                </FG>
+                <FG label="Días de renta">
+                  <input type="number" style={S.input} min={1} max={30} value={form.rentalDays||1} onChange={e=>handleUHaulChange('rentalDays',+e.target.value,form)}/>
+                </FG>
+              </div>
+              <div style={{display:'flex',gap:0,borderRadius:6,overflow:'hidden',border:'1px solid rgba(255,255,255,0.08)'}}>
+                {[['local','📍 Local (regresa el truck)'],['oneway','🏁 One-Way (otra ciudad)']].map(([v,l])=>(
+                  <button key={v} type="button" onClick={()=>handleUHaulChange('moveType',v,form)}
+                    style={{flex:1,padding:'8px',background:form.moveType===v?'#C9A84C':'transparent',color:form.moveType===v?'#0A0C14':'#94A3B8',border:'none',fontWeight:form.moveType===v?700:400,fontSize:'0.8rem',cursor:'pointer'}}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+              <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',fontSize:'0.83rem',color:'#94A3B8'}}>
+                <input type="checkbox" checked={form.includeInsurance!==false} onChange={e=>handleUHaulChange('includeInsurance',e.target.checked,form)}/>
+                Incluir SafeMove Insurance (${TRUCK_SPECS[form.truckSize||'20ft']?.insurancePerDay}/día) — recomendado
+              </label>
+              {form.truckCost > 0 && (
+                <div style={{display:'flex',justifyContent:'space-between',background:'rgba(201,168,76,0.08)',borderRadius:6,padding:'8px 12px',fontSize:'0.85rem'}}>
+                  <span style={{color:'#94A3B8'}}>Estimado UHaul ({TRUCK_SPECS[form.truckSize||'20ft']?.label}, {form.rentalDays} día{form.rentalDays>1?'s':''}, {form.moveType==='local'?'local':'one-way'})</span>
+                  <span style={{color:'#C9A84C',fontWeight:700}}>${form.truckCost.toLocaleString()}</span>
+                </div>
+              )}
+              <div style={{color:'#475569',fontSize:'0.7rem'}}>* Estimado basado en tarifas UHaul NJ. Confirmar precio exacto en uhaul.com según fecha y disponibilidad.</div>
+            </div>
             <FG label="Mudanceros"><input type="number" style={S.input} value={form.movers} onChange={e=>setForm({...form,movers:+e.target.value})} min={1} max={10}/></FG>
             <FG label="Horas trabajadas"><input type="number" style={S.input} value={form.hours} onChange={e=>setForm({...form,hours:+e.target.value})} min={1} max={24}/></FG>
             <FG label="Tarifa/hr por mudancero ($)"><input type="number" style={S.input} value={form.rate} onChange={e=>setForm({...form,rate:+e.target.value})} min={50}/></FG>
@@ -765,7 +921,7 @@ function Jobs({jobs,setJobs,openModal,closeModal,modal,editing,setViewing,filter
             <div style={{fontSize:'0.75rem',fontWeight:700,letterSpacing:'0.1em',textTransform:'uppercase',color:'#C9A84C',marginBottom:10}}>Desglose del Estimado</div>
             {[
               [`👷 Mano de obra ($${form.rate}/hr × ${form.movers} mud. × ${form.hours} hrs)`, c.labor],
-              [`🚛 Alquiler camión (${form.size||'2br'})`, c.truck],
+              [`🚛 Truck UHaul (${TRUCK_SPECS[form.truckSize||'20ft']?.label||form.size}, ${form.rentalDays||1} día${(form.rentalDays||1)>1?'s':''})`, c.truck],
               [`📍 ${form.miles||0} millas × $${MILE_RATE}/mi`, c.miles],
               form.packing && ['📦 Empaque completo', c.pack],
               form.storage && ['🗄 Storage temporal', c.stor],
