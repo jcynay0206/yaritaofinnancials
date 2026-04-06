@@ -28,6 +28,17 @@ const HOME_NOTES = {
   '5br':'⚠️ Muy probablemente 2 viajes. Confirmar con cliente.',
 };
 
+// Horas estimadas de carga en Punto A (descarga en Punto B = igual)
+const LOAD_HRS = { studio:1, '1br':1.5, '2br':2, '3br':3, '4br':4, '5br':5 };
+
+// Calcula horas automáticas: carga + viaje + descarga
+function calcAutoHours(size, driveMins) {
+  const load = LOAD_HRS[size] || 2;
+  const drive = parseFloat((driveMins / 60).toFixed(1));
+  const total = parseFloat((load + drive + load).toFixed(1));
+  return { load, drive, unload: load, total };
+}
+
 function calcUHaul(truckKey, moveType, miles, days, insurance) {
   const t = TRUCK_SPECS[truckKey]; if (!t) return 0;
   let sub = 0;
@@ -45,18 +56,42 @@ function calcUHaul(truckKey, moveType, miles, days, insurance) {
 // ORS geocode + directions (API key en .env como VITE_ORS_API_KEY)
 async function orsGetMiles(pickup, delivery) {
   const KEY = import.meta.env.VITE_ORS_API_KEY;
-  if (!KEY) throw new Error('Falta VITE_ORS_API_KEY en .env');
+  if (!KEY || KEY === 'undefined') throw new Error('API key no configurada. Agrega VITE_ORS_API_KEY en el archivo .env del proyecto');
+
+  // Geocodifica una dirección → [lng, lat]
   const geo = async (addr) => {
-    const r = await fetch(`https://api.openrouteservice.org/geocode/search?api_key=${KEY}&text=${encodeURIComponent(addr)}&boundary.country=US&size=1`);
-    const d = await r.json();
-    if (!d.features?.length) throw new Error(`Dirección no encontrada: "${addr}"`);
-    return d.features[0].geometry.coordinates;
+    let res;
+    try {
+      res = await fetch(
+        `https://api.openrouteservice.org/geocode/search?api_key=${KEY}&text=${encodeURIComponent(addr)}&boundary.country=US&size=1`,
+        { headers: { 'Accept': 'application/json' } }
+      );
+    } catch { throw new Error('Sin conexión a internet o ORS bloqueado'); }
+    if (!res.ok) {
+      if (res.status === 403) throw new Error('API key inválida. Verifica tu VITE_ORS_API_KEY');
+      throw new Error(`Error geocodificando dirección (${res.status})`);
+    }
+    const d = await res.json();
+    if (!d.features?.length) throw new Error(`Dirección no encontrada: "${addr}". Incluye ciudad y estado.`);
+    return d.features[0].geometry.coordinates; // [lng, lat]
   };
-  const [o, dest] = await Promise.all([geo(pickup), geo(delivery)]);
-  const r = await fetch(`https://api.openrouteservice.org/v2/directions/driving-car?api_key=${KEY}&start=${o[0]},${o[1]}&end=${dest[0]},${dest[1]}`);
-  const d = await r.json();
-  const seg = d.features?.[0]?.properties?.segments?.[0];
-  if (!seg) throw new Error('No se pudo calcular la ruta');
+
+  const [o, dst] = await Promise.all([geo(pickup), geo(delivery)]);
+
+  // POST es más confiable que GET para evitar problemas de CORS y límites de URL
+  let res;
+  try {
+    res = await fetch('https://api.openrouteservice.org/v2/directions/driving-car/json', {
+      method: 'POST',
+      headers: { 'Authorization': KEY, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ coordinates: [o, dst] }),
+    });
+  } catch { throw new Error('Sin conexión a internet o ORS bloqueado'); }
+
+  if (!res.ok) throw new Error(`Error calculando ruta (${res.status})`);
+  const d = await res.json();
+  const seg = d.routes?.[0]?.segments?.[0];
+  if (!seg) throw new Error('No se pudo calcular la ruta entre esas direcciones');
   const miles = parseFloat((seg.distance / 1609.344).toFixed(1));
   const mins  = Math.round(seg.duration / 60);
   return { miles, mins };
@@ -641,10 +676,14 @@ function Jobs({jobs,setJobs,openModal,closeModal,modal,editing,setViewing,filter
   const [orsLoading, setOrsLoading] = useState(false);
   const [orsError, setOrsError] = useState('');
 
-  // Cuando cambia tamaño de hogar → sugerir truck automáticamente
+  // Cuando cambia tamaño de hogar → sugerir truck + recalcular horas automáticas
   const handleSizeChange = (size, currentForm) => {
     const suggested = HOME_TO_TRUCK[size] || '20ft';
-    const newForm = { ...currentForm, size, truckSize: suggested };
+    const loadH = LOAD_HRS[size] || 2;
+    const driveH = currentForm.hoursDrive || 0;
+    const totalH = parseFloat((loadH + driveH + loadH).toFixed(1));
+    const newForm = { ...currentForm, size, truckSize: suggested,
+      hoursLoad: loadH, hoursUnload: loadH, hours: totalH };
     const cost = calcUHaul(suggested, newForm.moveType, newForm.miles||0, newForm.rentalDays||1, newForm.includeInsurance);
     setForm({ ...newForm, truckCost: cost });
   };
@@ -664,15 +703,19 @@ function Jobs({jobs,setJobs,openModal,closeModal,modal,editing,setViewing,filter
     try {
       const { miles, mins } = await orsGetMiles(form.origin, form.dest);
       const h = Math.floor(mins/60), m = mins%60;
-      const dur = h > 0 ? `${h}h ${m}min` : `${m}min`;
+      const dur = h > 0 ? `${h}h ${m > 0 ? m+'min' : ''}`.trim() : `${m}min`;
+      const auto = calcAutoHours(form.size, mins);
       const cost = calcUHaul(form.truckSize, form.moveType, miles, form.rentalDays||1, form.includeInsurance);
-      setForm(f => ({ ...f, miles, tripDuration: dur, truckCost: cost }));
+      setForm(f => ({ ...f, miles, tripDuration: dur, truckCost: cost,
+        hoursLoad: auto.load, hoursDrive: auto.drive, hoursUnload: auto.unload,
+        hours: auto.total, hoursAuto: true }));
     } catch(e) { setOrsError(e.message); }
     finally { setOrsLoading(false); }
   };
 
-  const emptyForm = { client:'',phone:'',date:tod(),origin:'',dest:'',type:'local',size:'2br',movers:3,hours:3,miles:15,rate:cfg.rate||150,packing:false,storage:false,notes:'',status:'pending',anticipo:0,payMethod:'Zelle',payLink:'',
-    truckSize:'20ft', moveType:'local', rentalDays:1, includeInsurance:true, truckCost:'', tripDuration:'' };
+  const emptyForm = { client:'',phone:'',date:tod(),origin:'',dest:'',type:'local',size:'2br',movers:3,hours:4,rate:cfg.rate||150,packing:false,storage:false,notes:'',status:'pending',anticipo:0,payMethod:'Zelle',payLink:'',
+    truckSize:'20ft', moveType:'local', rentalDays:1, includeInsurance:true, truckCost:'', tripDuration:'',
+    hoursLoad:2, hoursDrive:0, hoursUnload:2, hoursAuto:false };
 
   useEffect(() => {
     if (modal==='job') { setForm(editing ? {...editing} : emptyForm); setShowForm(true); }
@@ -886,8 +929,42 @@ function Jobs({jobs,setJobs,openModal,closeModal,modal,editing,setViewing,filter
               <div style={{color:'#475569',fontSize:'0.7rem'}}>* Estimado basado en tarifas UHaul NJ. Confirmar precio exacto en uhaul.com según fecha y disponibilidad.</div>
             </div>
             <FG label="Mudanceros"><input type="number" style={S.input} value={form.movers} onChange={e=>setForm({...form,movers:+e.target.value})} min={1} max={10}/></FG>
-            <FG label="Horas trabajadas"><input type="number" style={S.input} value={form.hours} onChange={e=>setForm({...form,hours:+e.target.value})} min={1} max={24}/></FG>
             <FG label="Tarifa/hr por mudancero ($)"><input type="number" style={S.input} value={form.rate} onChange={e=>setForm({...form,rate:+e.target.value})} min={50}/></FG>
+
+            {/* ── Horas por tramos (Opción Pro) ── */}
+            <div style={{gridColumn:'1/-1',background:'rgba(96,165,250,0.04)',border:'1px solid rgba(96,165,250,0.15)',borderRadius:10,padding:'14px 16px'}}>
+              <div style={{fontSize:'0.75rem',fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase',color:'#60A5FA',marginBottom:12}}>
+                ⏱️ Horas de Trabajo
+                {form.hoursAuto && <span style={{color:'#4ADE80',fontWeight:400,textTransform:'none',marginLeft:8,fontSize:'0.76rem'}}>✦ calculadas automáticamente</span>}
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10,marginBottom:10}}>
+                <FG label="📍 Punto A — Carga (hrs)">
+                  <input type="number" step="0.5" style={S.input} value={form.hoursLoad||0}
+                    onChange={e=>{ const v=+e.target.value; const t=parseFloat((v+(form.hoursDrive||0)+(form.hoursUnload||v)).toFixed(1)); setForm({...form,hoursLoad:v,hoursUnload:v,hours:t,hoursAuto:false}); }} min={0.5} max={12}/>
+                </FG>
+                <FG label="🚗 Viaje (hrs)">
+                  <input type="number" step="0.1" style={{...S.input,color:'#94A3B8'}} value={form.hoursDrive||0}
+                    onChange={e=>{ const v=+e.target.value; const t=parseFloat(((form.hoursLoad||0)+v+(form.hoursUnload||0)).toFixed(1)); setForm({...form,hoursDrive:v,hours:t,hoursAuto:false}); }} min={0} max={24}/>
+                </FG>
+                <FG label="🏁 Punto B — Descarga (hrs)">
+                  <input type="number" step="0.5" style={{...S.input,color:'#94A3B8'}} value={form.hoursUnload||0}
+                    onChange={e=>{ const v=+e.target.value; const t=parseFloat(((form.hoursLoad||0)+(form.hoursDrive||0)+v).toFixed(1)); setForm({...form,hoursUnload:v,hours:t,hoursAuto:false}); }} min={0.5} max={12}/>
+                </FG>
+              </div>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',background:'rgba(96,165,250,0.08)',borderRadius:6,padding:'8px 12px'}}>
+                <span style={{fontSize:'0.82rem',color:'#94A3B8'}}>
+                  {form.hoursLoad||0}h carga + {form.hoursDrive||0}h viaje + {form.hoursUnload||0}h descarga
+                </span>
+                <span style={{fontWeight:700,color:'#60A5FA',fontSize:'0.9rem'}}>
+                  = <strong>{form.hours||0}h totales</strong> × {form.movers} mud. × ${form.rate}/hr
+                </span>
+              </div>
+              {!form.hoursAuto && form.miles > 0 && (
+                <div style={{marginTop:8,fontSize:'0.75rem',color:'#64748B'}}>
+                  💡 Presiona "Calcular Millas Automático" para recalcular horas basadas en el tiempo real de manejo
+                </div>
+              )}
+            </div>
             <FG label="Estado"><select style={S.input} value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>
               <option value="pending">Pendiente de pago</option>
               <option value="partial">Anticipo recibido</option>
@@ -920,14 +997,15 @@ function Jobs({jobs,setJobs,openModal,closeModal,modal,editing,setViewing,filter
           <div style={{background:'rgba(201,168,76,0.06)',border:'1px solid rgba(201,168,76,0.2)',borderRadius:10,padding:16,marginTop:10}}>
             <div style={{fontSize:'0.75rem',fontWeight:700,letterSpacing:'0.1em',textTransform:'uppercase',color:'#C9A84C',marginBottom:10}}>Desglose del Estimado</div>
             {[
-              [`👷 Mano de obra ($${form.rate}/hr × ${form.movers} mud. × ${form.hours} hrs)`, c.labor],
+              [`👷 Mano de obra ($${form.rate}/hr × ${form.movers} mud. × ${form.hours}h)`, c.labor],
+              form.hoursAuto && [`   ↳ ${form.hoursLoad}h carga + ${form.hoursDrive}h viaje + ${form.hoursUnload}h descarga`, null],
               [`🚛 Truck UHaul (${TRUCK_SPECS[form.truckSize||'20ft']?.label||form.size}, ${form.rentalDays||1} día${(form.rentalDays||1)>1?'s':''})`, c.truck],
               [`📍 ${form.miles||0} millas × $${MILE_RATE}/mi`, c.miles],
               form.packing && ['📦 Empaque completo', c.pack],
               form.storage && ['🗄 Storage temporal', c.stor],
             ].filter(Boolean).map(([label,val],i)=>(
-              <div key={i} style={{display:'flex',justifyContent:'space-between',fontSize:'0.82rem',color:'#94A3B8',marginBottom:5}}>
-                <span>{label}</span><span style={{color:'#F1F5F9',fontWeight:500}}>{$0(val)}</span>
+              <div key={i} style={{display:'flex',justifyContent:'space-between',fontSize: val===null?'0.75rem':'0.82rem',color:val===null?'#475569':'#94A3B8',marginBottom:5}}>
+                <span>{label}</span>{val!==null && <span style={{color:'#F1F5F9',fontWeight:500}}>{$0(val)}</span>}
               </div>
             ))}
             <div style={{borderTop:'1px solid rgba(201,168,76,0.2)',marginTop:8,paddingTop:8,display:'flex',justifyContent:'space-between',fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:'1.2rem'}}>
